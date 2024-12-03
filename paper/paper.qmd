@@ -1,0 +1,22 @@
+---
+title: ""
+author: 
+  - Jerry Xia
+thanks: "Code and data are available at: <>"
+date: today
+date-format: long
+abstract: ""
+format: pdf
+number-sections: true
+toc: true 
+bibliography: references.bib
+---
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(ggplot2)
+```
