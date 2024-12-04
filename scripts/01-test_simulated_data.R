@@ -5,8 +5,6 @@
 # Contact: Jerry.xia@mail.utoronto.ca
 # License: MIT
 # Pre-requisites: Install tidyverse and testthat packages before running:
-#                 install.packages("tidyverse")
-#                 install.packages("testthat")
 #                 Ran 00-simulate_data.R
 
 
