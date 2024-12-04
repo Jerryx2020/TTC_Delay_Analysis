@@ -1,5 +1,5 @@
 #### Preamble ####
-# Purpose: Clean the raw TTC delay data to prepare for analysis
+# Purpose: Clean the raw TTC delay data and combine them into one dataset
 # Author: Jerry Xia
 # Date: December 3, 2024
 # Contact: jerry.xia@mail.utoronto.ca
@@ -7,12 +7,15 @@
 # Pre-requisites: 
 # - Raw data files must be present in `data/01-raw_data` directory.
 # - Run `02-download_data.R` first to ensure the data exists.
+# - Install `arrow` package for saving Parquet files:
+#   install.packages("arrow")
 
 
 
 #### Workspace setup ####
 library(tidyverse)
 library(here)
+library(arrow)
 
 # Define raw and processed data directories
 raw_data_dir <- here("data", "01-raw_data")
@@ -41,16 +44,23 @@ cleaned_bus <- bus_data %>%
     mode = "Bus",
     date = as.Date(Date, format = "%d-%m-%Y"), # Standardize date format
     day_of_week = weekdays(date),
-    bound = Direction, # Retain `Direction` as `bound`
+    bound = case_when(
+      Direction %in% c("N", "North") ~ "North",
+      Direction %in% c("S", "South") ~ "South",
+      Direction %in% c("E", "East") ~ "East",
+      Direction %in% c("W", "West") ~ "West",
+      TRUE ~ NA_character_  # Keep only valid directions or set as NA
+    ),
     min_delay = `Min Delay`,
     min_gap = `Min Gap`,
     location = case_when(
       str_detect(Location, "DUNDAS") ~ "DUNDAS",
       str_detect(Location, "YORKDALE") ~ "YORKDALE",
       TRUE ~ "OTHER"
-    )
+    ),
+    line = NA_character_ # No `line` for buses
   ) %>%
-  select(mode, date, day_of_week, bound, min_delay, min_gap, location)
+  select(mode, date, day_of_week, bound, min_delay, min_gap, location, line)
 
 
 
@@ -61,16 +71,23 @@ cleaned_subway <- subway_data %>%
     mode = "Subway",
     date = as.Date(Date, format = "%Y/%m/%d"), # Standardize date format
     day_of_week = weekdays(date),
-    bound = Bound,
+    bound = case_when(
+      Bound %in% c("N", "North") ~ "North",
+      Bound %in% c("S", "South") ~ "South",
+      Bound %in% c("E", "East") ~ "East",
+      Bound %in% c("W", "West") ~ "West",
+      TRUE ~ NA_character_  # Keep only valid directions or set as NA
+    ),
     min_delay = `Min Delay`,
     min_gap = `Min Gap`,
     location = case_when(
       str_detect(Station, "DUNDAS") ~ "DUNDAS",
       str_detect(Station, "YORKDALE") ~ "YORKDALE",
       TRUE ~ "OTHER"
-    )
+    ),
+    line = NA_character_ # No `line` for subways
   ) %>%
-  select(mode, date, day_of_week, bound, min_delay, min_gap, location)
+  select(mode, date, day_of_week, bound, min_delay, min_gap, location, line)
 
 
 
@@ -81,7 +98,13 @@ cleaned_streetcar <- streetcar_data %>%
     mode = "Streetcar",
     date = as.Date(Date, format = "%d-%m-%Y"), # Standardize date format
     day_of_week = weekdays(date),
-    bound = Bound,
+    bound = case_when(
+      Bound %in% c("N", "North") ~ "North",
+      Bound %in% c("S", "South") ~ "South",
+      Bound %in% c("E", "East") ~ "East",
+      Bound %in% c("W", "West") ~ "West",
+      TRUE ~ NA_character_  # Keep only valid directions or set as NA
+    ),
     min_delay = `Min Delay`,
     min_gap = `Min Gap`,
     location = case_when(
@@ -98,8 +121,15 @@ cleaned_streetcar <- streetcar_data %>%
 
 
 
-#### Save Cleaned Data ####
+#### Combine All Modes ####
 
-write_csv(cleaned_bus, file.path(processed_data_dir, "cleaned_bus.csv"))
-write_csv(cleaned_subway, file.path(processed_data_dir, "cleaned_subway.csv"))
-write_csv(cleaned_streetcar, file.path(processed_data_dir, "cleaned_streetcar.csv"))
+# Combine cleaned datasets
+combined_data <- bind_rows(cleaned_bus, cleaned_subway, cleaned_streetcar)
+
+
+
+#### Save Combined Data ####
+
+# Save as a Parquet file
+write_parquet(combined_data, file.path(processed_data_dir, "combined_ttc_delay_data.parquet"))
+message("Combined dataset saved as Parquet.")
