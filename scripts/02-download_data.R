@@ -1,36 +1,59 @@
 #### Preamble ####
-# Purpose: Downloads and saves the data from opendatatoronto
+# Purpose: Downloads and saves TTC delay data from Open Data Toronto
 # Author: Jerry Xia
 # Date: December 3, 2024
 # Contact: jerry.xia@mail.utoronto.ca
 # License: MIT
+# Pre-requisites: Install `opendatatoronto` and `tidyverse` packages:
+#   install.packages("opendatatoronto")
+#   install.packages("tidyverse")
+
 
 
 #### Workspace setup ####
 library(opendatatoronto)
-library(here)
 library(tidyverse)
+library(here)
+
+# Define the raw data directory
+raw_data_dir <- here("data", "01-raw_data")
+
+# Create raw data directory if it doesn't already exist
+if (!dir.exists(raw_data_dir)) {
+  dir.create(raw_data_dir, recursive = TRUE)
+}
+
+
 
 #### Download data ####
-# Define a function to safely read and save data
-read_and_save <- function(resource_id, dataset_name, raw_data_dir) {
-  resource <- list_package_resources(resource_id) |>
-    filter(name == dataset_name) |>
+
+# Function to fetch and save data
+fetch_and_save_data <- function(package_id, resource_name, file_name) {
+  resource <- list_package_resources(package_id) |>
+    filter(name == resource_name) |>
     get_resource()
   
-  # Convert problematic columns to character (example adjustment)
-  resource <- resource |>
-    mutate(across(where(is.character), ~ as.character(.))) # Adjust based on inspection
-  
-  write_csv(resource, file.path(raw_data_dir, paste0("raw_", dataset_name, ".csv")))
+  write_csv(resource, file.path(raw_data_dir, file_name))
+  message(glue::glue("Saved {file_name} successfully."))
 }
 
-# Create raw data directory if not exists
-if (!dir.exists(here("data", "01-raw_data"))) {
-  dir.create(here("data", "01-raw_data"), recursive = TRUE)
-}
+# Fetch and save subway data
+fetch_and_save_data(
+  package_id = "996cfe8d-fb35-40ce-b569-698d51fc683b",
+  resource_name = "ttc-subway-delay-data-2024",
+  file_name = "raw_data_subway.csv"
+)
 
-# Download datasets
-read_and_save("e271cdae-8788-4980-96ce-6a5c95bc6618", "ttc-bus-delay-data-2024", here("data", "01-raw_data"))
-read_and_save("996cfe8d-fb35-40ce-b569-698d51fc683b", "ttc-subway-delay-data-2024", here("data", "01-raw_data"))
-read_and_save("b68cb71b-44a7-4394-97e2-5d2f41462a5d", "ttc-streetcar-delay-data-2024", here("data", "01-raw_data"))
+# Fetch and save streetcar data
+fetch_and_save_data(
+  package_id = "b68cb71b-44a7-4394-97e2-5d2f41462a5d",
+  resource_name = "ttc-streetcar-delay-data-2024",
+  file_name = "raw_data_streetcar.csv"
+)
+
+# Fetch and save bus data
+fetch_and_save_data(
+  package_id = "e271cdae-8788-4980-96ce-6a5c95bc6618",
+  resource_name = "ttc-bus-delay-data-2024",
+  file_name = "raw_data_bus.csv"
+)
