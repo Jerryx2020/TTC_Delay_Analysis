@@ -4,11 +4,12 @@
 # Date: December 3, 2024
 # Contact: jerry.xia@mail.utoronto.ca
 # License: MIT
-# Pre-requisites: Install tidyverse, arrow, and testthat packages:
-#                 install.packages("tidyverse")
-#                 install.packages("arrow")
-#                 install.packages("testthat")
-#                 Ran 03-clean_data.R
+# Pre-requisites: 
+# - Install tidyverse, arrow, and testthat packages:
+#   install.packages("tidyverse")
+#   install.packages("arrow")
+#   install.packages("testthat")
+# - Run 03-clean_data.R to generate the Parquet file.
 
 
 
@@ -77,8 +78,8 @@ test_that("Dates are in the correct format and range", {
 
 # Test 8: Check that `bound` contains valid directions
 test_that("Bound contains valid directions", {
-  valid_directions <- c("N", "S", "E", "W", NA)
-  expect_true(all(cleaned_data$bound %in% valid_directions))
+  valid_directions <- c("North", "South", "East", "West", NA)
+  expect_true(all(cleaned_data$bound %in% valid_directions, na.rm = TRUE))
 })
 
 # Test 9: Check that `day_of_week` contains valid day names
@@ -86,8 +87,3 @@ test_that("Day of week is valid", {
   valid_days <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
   expect_true(all(cleaned_data$day_of_week %in% valid_days))
 })
-
-
-
-#### Run tests ####
-# All tests will execute as this script is sourced or run
