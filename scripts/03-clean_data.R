@@ -21,11 +21,6 @@ library(arrow)
 raw_data_dir <- here("data", "01-raw_data")
 processed_data_dir <- here("data", "02-analysis_data")
 
-# Create processed data directory if it doesn't exist
-if (!dir.exists(processed_data_dir)) {
-  dir.create(processed_data_dir, recursive = TRUE)
-}
-
 
 
 #### Read raw data ####
