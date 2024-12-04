@@ -20,3 +20,31 @@ bibliography: references.bib
 library(tidyverse)
 library(ggplot2)
 ```
+
+# Data {#sec-data}
+The analysis was conducted using R [@citeR], leveraging the following R packages to facilitate data cleaning, visualization, and analysis: `tidyverse` [@citeTidyverse], `ggplot2` [@citeGgplot2], `dplyr` [@citeDplyr], `here` [@citeHere], `arrow` [@citeArrow], `caret` [@citeCaret], `randomForest` [@citeRandomForest], `stringr` [@citeStringr], and `readr` [@citeReadr]. 
+
+Additional guidance for this project was drawn from Telling Stories with Data by Rohan Alexander [@citeTellingStories], which shaped the analytical approach. Details about data cleaning and variable transformations are provided in [Appendix -@sec-data_details].
+
+## Source of Data
+The data for this project comprises two main components: real-world TTC delay data obtained from Open Data Toronto and a simulated dataset created to replicate transit delay patterns. Together, these datasets provide a comprehensive foundation for analyzing patterns and predictors of delays across transit modes, locations, and temporal attributes.
+
+### Real TTC Data
+The primary dataset used in this study was retrieved from Open Data Toronto, a platform providing public access to municipal datasets. The data was accessed using the `opendatatoronto` R package [@citeOpendatatoronto], which simplifies the process of downloading and organizing datasets. This dataset contains records of delays reported across TTC bus, subway, and streetcar services for 2024, including the following key variables:
+
+Transit Mode: Identifies whether the delay occurred on a bus, subway, or streetcar.
+Geographic Locations: Includes specific data points for Dundas (representing downtown Toronto) and Yorkdale (a suburban area).
+Temporal Variables: Captures patterns across days of the week, distinguishing between commuting and recreational travel periods.
+Directional Bound: Specifies the direction of travel (e.g., North, South, East, West), enabling an analysis of directional influences on delays.
+Delay Metrics: Includes `min_delay`, which measures the minimum delay experienced, and `min_gap`, which reflects the time gap between vehicles.
+This dataset was chosen for its granularity and relevance to the TTC system, offering detailed insights into the operational dynamics of Toronto’s public transit. Similar datasets, such as internal TTC reports or proprietary transit data from other agencies, were considered but not selected due to accessibility limitations and lack of detailed delay metrics. By focusing on Open Data Toronto, this analysis ensures a reproducible workflow and public accessibility.
+
+### Simulated Data
+To supplement the real-world data and enable testing of analysis workflows, a simulated dataset was generated. The simulation was conducted using R and recreated key variables (`min_delay`, `min_gap`, `mode`, `bound`, `location`) to mirror the characteristics of real TTC data. Simulations allowed for controlled experimentation and testing of modeling approaches without the limitations of missing or incomplete records.
+
+The simulated dataset incorporated realistic assumptions about Toronto’s transit system:
+
+Delay Distributions: Simulated delays were based on expected ranges for each transit mode, reflecting variations in service reliability.
+Geographic Focus: Locations like Dundas and Yorkdale were assigned unique delay distributions to replicate urban-suburban dynamics.
+Directional Attributes: The simulation included travel directions to examine potential differences in delays caused by infrastructure or traffic conditions.
+The `arrow` package [@citeArrow] was used to save the simulated dataset in Parquet format, ensuring compatibility and efficiency during analysis. This approach also allowed seamless integration with the real TTC data.
