@@ -2,7 +2,7 @@
 title: ""
 author: 
   - Jerry Xia
-thanks: "Code and data are available at: <>"
+thanks: "Code and data are available at: <https://github.com/Jerryx2020/TTC_Delay_Analysis>"
 date: today
 date-format: long
 abstract: ""
