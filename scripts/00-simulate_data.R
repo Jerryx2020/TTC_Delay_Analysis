@@ -5,8 +5,8 @@
 # Date: 3 December 2024
 # Contact: Jerry.xia@mail.utoronto.ca
 # License: MIT
-# Pre-requisites: Install tidyverse package before running:
-#                 install.packages("tidyverse")
+# Pre-requisites: 
+# - Install tidyverse package before running
 
 
 

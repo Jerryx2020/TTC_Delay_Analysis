@@ -5,10 +5,11 @@
 # Contact: jerry.xia@mail.utoronto.ca
 # License: MIT
 # Pre-requisites: 
+# - Install `arrow` package for saving Parquet files:
 # - Raw data files must be present in `data/01-raw_data` directory.
 # - Run `02-download_data.R` first to ensure the data exists.
-# - Install `arrow` package for saving Parquet files:
-#   install.packages("arrow")
+
+
 
 
 

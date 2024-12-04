@@ -6,11 +6,7 @@
 # License: MIT
 # Pre-requisites: 
 # - Run 03-clean_data.R to generate the combined Parquet file.
-# - Install required packages:
-#   install.packages("tidyverse")
-#   install.packages("arrow")
-#   install.packages("caret")
-#   install.packages("randomForest")
+# - Install required packages
 
 
 

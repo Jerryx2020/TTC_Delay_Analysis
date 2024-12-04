@@ -7,9 +7,6 @@
 # Pre-requisites: 
 # - Run 03-clean_data.R to generate the combined Parquet file.
 # - Install tidyverse, arrow, and ggplot2 packages:
-#   install.packages("tidyverse")
-#   install.packages("arrow")
-#   install.packages("ggplot2")
 
 
 

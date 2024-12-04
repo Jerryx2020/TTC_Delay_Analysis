@@ -5,10 +5,7 @@
 # Contact: jerry.xia@mail.utoronto.ca
 # License: MIT
 # Pre-requisites: 
-# - Install tidyverse, arrow, and testthat packages:
-#   install.packages("tidyverse")
-#   install.packages("arrow")
-#   install.packages("testthat")
+# - Install tidyverse, arrow, and testthat packages
 # - Run 03-clean_data.R to generate the Parquet file.
 
 

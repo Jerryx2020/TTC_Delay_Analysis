@@ -4,9 +4,8 @@
 # Date: December 3, 2024
 # Contact: jerry.xia@mail.utoronto.ca
 # License: MIT
-# Pre-requisites: Install `opendatatoronto` and `tidyverse` packages:
-#   install.packages("opendatatoronto")
-#   install.packages("tidyverse")
+# Pre-requisites: 
+# - Install `opendatatoronto` and `tidyverse` packages
 
 
 
