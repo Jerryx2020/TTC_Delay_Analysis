@@ -16,6 +16,11 @@ library(testthat)
 # Load the simulated dataset
 simulated_data <- read_csv("data/00-simulated_data/simulated_ttc_delay_data_focus.csv")
 
+# Check if file exists before running tests
+if (!file.exists(file_path)) {
+  stop("The file 'simulated_ttc_delay_data_focus.csvv' does not exist. Make sure to run 00-simulate_data.R to generate this file")
+}
+
 #### Define tests ####
 
 # Test 1: Check that the dataset has the correct columns
