@@ -76,7 +76,7 @@ r_squared <- cor(test_predictions, test_data$min_delay)^2
 rmse <- sqrt(mean((test_predictions - test_data$min_delay)^2))
 
 # Print evaluation metrics
-cat("Random Forest Model Performance:\n")x
+cat("Random Forest Model Performance:\n")
 cat("R-squared: ", round(r_squared, 3), "\n")
 cat("RMSE: ", round(rmse, 3), "\n")
 
