@@ -18,11 +18,6 @@ library(here)
 # Define the raw data directory
 raw_data_dir <- here("data", "01-raw_data")
 
-# Create raw data directory if it doesn't already exist
-if (!dir.exists(raw_data_dir)) {
-  dir.create(raw_data_dir, recursive = TRUE)
-}
-
 
 
 #### Download data ####
