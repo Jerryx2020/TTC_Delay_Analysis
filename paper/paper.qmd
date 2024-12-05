@@ -1,11 +1,12 @@
 ---
-title: ""
+title: "Transit Delay Patterns in 2024 Toronto: A Comparative Analysis of Geographic, Modal, and Temporal Factors"
+subtitle: "Uncovering Operational Challenges and Opportunities for Improving Toronto’s Transit System"
 author: 
   - Jerry Xia
 thanks: "Code and data are available at: <https://github.com/Jerryx2020/TTC_Delay_Analysis>"
-date: today
+date: "December 3, 2024"
 date-format: long
-abstract: ""
+abstract: "This study investigates delays in the Toronto Transit Commission (TTC), focusing on buses, subways, and streetcars, to understand factors affecting transit reliability. Using real-world data from Open Data Toronto and a random forest model, it identifies key predictors of delays, including transit mode, geographic location, and temporal patterns. The analysis reveals that buses experience the most frequent and longest delays, particularly in urban areas like Dundas, while suburban locations such as Yorkdale face fewer disruptions. These findings highlight the operational challenges unique to transit modes and locations, providing actionable insights to improve public transit efficiency. This research contributes to understanding how transit delays vary across contexts, offering strategies to enhance service reliability for commuters and transit planners."
 format: pdf
 number-sections: true
 toc: true 
@@ -17,85 +18,99 @@ bibliography: references.bib
 #| warning: false
 #| message: false
 
-library(tidyverse)
-library(ggplot2)
+# Load Libraries
+packages <- c("tidyverse", "kableExtra", "ggplot2", "dplyr", "here", "knitr", "arrow", "randomForest")
+
+load_and_install <- function(package_list) {
+  for (x in packages) {
+    if (!require(x, character.only = TRUE)) {
+      install.packages(i)
+      library(x, character.only = TRUE)
+    }
+  }
+}
+
+load_and_install(packages)
+
+# Load Model
+model <- readRDS(here::here("models/random_forest_model_delay.rds"))
+
+# Load the model metrics
+model_metrics <- readRDS(here::here("models", "evaluation_results.rds"))
+
+# Load Data
+cleaned_data <- read_parquet(here::here("data/02-analysis_data/combined_ttc_delay_data.parquet")) %>%
+  filter(!is.na(location)) %>%
+  mutate(
+    location = factor(location, levels = unique(location)),
+    day_of_week = factor(day_of_week, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")),
+    mode = factor(mode, levels = c("Bus", "Streetcar", "Subway"))
+  )
+
 ```
 
-# Data {#sec-data}
-The analysis was conducted using R [@citeR], leveraging the following R packages to facilitate data cleaning, visualization, and analysis: `tidyverse` [@citeTidyverse], `ggplot2` [@citeGgplot2], `dplyr` [@citeDplyr], `here` [@citeHere], `arrow` [@citeArrow], `caret` [@citeCaret], `randomForest` [@citeRandomForest], `stringr` [@citeStringr], and `readr` [@citeReadr]. 
 
-Additional guidance for this project was drawn from Telling Stories with Data by Rohan Alexander [@citeTellingStories], which shaped the analytical approach. Details about data cleaning and variable transformations are provided in [Appendix -@sec-data_details].
+
+# Introduction
+The performance of public transit systems is a cornerstone of urban mobility, shaping commuter experiences and the broader dynamics of city life. In Toronto, the Toronto Transit Commission (TTC) operates a multimodal network of buses, subways, and streetcars, each of which faces distinct operational challenges. Transit delays remain a persistent issue, disrupting schedules, inconveniencing passengers, and reducing the overall efficiency of the city’s transportation infrastructure. Delays can also erode public trust in transit systems, which is critical for cities aiming to increase public transit use as part of sustainable urban mobility strategies [@citeLitman2023]. Understanding the underlying factors contributing to these delays is essential for designing interventions that enhance system reliability and commuter satisfaction.
+
+This study investigates TTC delays across buses, subways, and streetcars, emphasizing patterns across geographic locations and temporal contexts. Two specific locations—Dundas, in Toronto’s urban core, and Yorkdale, a suburban area—serve as focal points for comparative analysis. Dundas represents a dense, high-demand transit environment often subject to congestion and frequent service interruptions, consistent with findings in other high-density urban transit systems [@citeCats2017]. In contrast, Yorkdale provides a suburban context with less frequent service and lower traffic volumes, which are typically associated with fewer delays and more predictable transit operations [@citeHess2007]. By exploring these contrasting environments, this research aims to uncover delay dynamics shaped by urban density, transit demand, and local infrastructure.
+
+Previous research has examined broad operational inefficiencies, such as traffic congestion and service disruptions, as primary contributors to delays [@citeLitman2023]. However, the complex interactions between transit mode, geographic factors, and temporal patterns remain underexplored [@citeCurrie2012]. This study addresses that gap by leveraging detailed datasets from Open Data Toronto to model delay durations and identify key predictors, including transit mode, travel direction (bound), and day of the week. The findings align with global research highlighting the importance of mode-specific challenges, such as the susceptibility of buses to traffic congestion and the relative reliability of rail-based systems [@citeCats2017; @citeHess2007].
+
+The estimand of this study is delay duration (min_delay), defined as the recorded delay for individual transit trips. Using a Random Forest algorithm, this study models delay duration with predictors such as mode, location, temporal factors, and service regularity (min_gap). The analysis reveals significant variations in delays across transit modes and geographic locations, underscoring the challenges faced by buses in urban settings compared to the more consistent performance of subways. Temporal patterns, such as higher delays during weekdays, further highlight the role of commuter-driven demand in shaping transit reliability.
+
+The structure of this paper is as follows: Section @sec-data details the datasets, cleaning procedures, and key variables used in the analysis. Section @sec-methods outlines the exploratory data analysis and the modeling framework, explaining the rationale for selecting Random Forests. Section @sec-results presents the primary findings, including visualizations and statistical summaries of delay patterns. Finally, Section @sec-discussion interprets the results, explores their implications for TTC operations, and identifies limitations and opportunities for future research.
+
+# Data {#sec-data}
+The analysis was conducted using R [@citeR], leveraging the following R packages to facilitate data cleaning, visualization, and analysis: `tidyverse` [@citeTidyverse], `ggplot2` [@citeGgplot2], `dplyr` [@citeDplyr], `here` [@citeHere], `arrow` [@citeArrow], `caret` [@citeCaret], `randomForest` [@citeRandomForest], `stringr` [@citeStringr], `knitr` [@citeKnitr], `testthat` [@citeTestthat] and `readr` [@citeReadr]. 
+
+Additional guidance for this project was drawn from Telling Stories with Data by Rohan Alexander [@citeTellingStories], which shaped the analytical approach. Details about data cleaning and variable transformations are provided in [@sec-data-cleaning].
 
 ## Source of Data
-The data for this project comprises two main components: real-world TTC delay data obtained from Open Data Toronto and a simulated dataset created to replicate transit delay patterns. Together, these datasets provide a comprehensive foundation for analyzing patterns and predictors of delays across transit modes, locations, and temporal attributes.
+The dataset for this research was obtained from Open Data Toronto, a publicly accessible platform providing detailed municipal datasets. This particular dataset focuses on transit delays across the Toronto Transit Commission (TTC) network, including buses, subways, and streetcars, for the year 2024. The dataset offers a granular view of transit disruptions, capturing key operational metrics and contextual factors. It serves as the primary resource for analyzing delay patterns and identifying the influences of transit mode, geographic location, and temporal factors on service reliability.
 
-### Real TTC Data
-The primary dataset used in this study was retrieved from Open Data Toronto, a platform providing public access to municipal datasets. The data was accessed using the `opendatatoronto` R package [@citeOpendatatoronto], which simplifies the process of downloading and organizing datasets. This dataset contains records of delays reported across TTC bus, subway, and streetcar services for 2024, including the following key variables:
+The data encompasses several critical variables. ‘mode’ categorizes the transit type—bus, subway, or streetcar—each with distinct operational contexts. The ‘location’ variable specifies where delays occurred, with a focus on Dundas, representing Toronto’s urban core, and Yorkdale, a suburban area. These locations allow for a comparative analysis of transit dynamics across contrasting environments. Temporal variables, such as ‘day_of_week,’ facilitate an understanding of how delays vary between weekdays and weekends, reflecting commuter versus recreational patterns. Directionality, captured in the ‘bound’ variable, enables an exploration of the geographic and directional influences on delays. Finally, the numerical variables ‘min_delay,’ measuring the shortest delay recorded, and ‘min_gap,’ reflecting the time gap between consecutive vehicles, are central to understanding service disruptions and regularity.
 
-- Transit Mode: Identifies whether the delay occurred on a bus, subway, or streetcar.
-- Geographic Locations: Includes specific data points for Dundas (representing downtown Toronto) and Yorkdale (a suburban area).
-- Temporal Variables: Captures patterns across days of the week, distinguishing between commuting and recreational travel periods.
-- Directional Bound: Specifies the direction of travel (e.g., North, South, East, West), enabling an analysis of directional influences on delays.
-- Delay Metrics: Includes min_delay, which measures the minimum delay experienced, and min_gap, which reflects the time gap between vehicles.
-This dataset was chosen for its granularity and relevance to the TTC system, offering detailed insights into the operational dynamics of Toronto’s public transit. Similar datasets, such as internal TTC reports or proprietary transit data from other agencies, were considered but not selected due to accessibility limitations and lack of detailed delay metrics. By focusing on Open Data Toronto, this analysis ensures a reproducible workflow and public accessibility.
-
-### Simulated Data
-To supplement the real-world data and enable testing of analysis workflows, a simulated dataset was generated. The simulation was conducted using R and recreated key variables (min_delay`, min_gap, mode, bound, location) to mirror the characteristics of real TTC data. Simulations allowed for controlled experimentation and testing of modeling approaches without the limitations of missing or incomplete records.
-
-The simulated dataset incorporated realistic assumptions about Toronto’s transit system:
-
-- Delay Distributions: Simulated delays were based on expected ranges for each transit mode, reflecting variations in service reliability.
-- Geographic Focus: Locations like Dundas and Yorkdale were assigned unique delay distributions to replicate urban-suburban dynamics.
-- Directional Attributes: The simulation included travel directions to examine potential differences in delays caused by infrastructure or traffic conditions.
-The `arrow` package [@citeArrow] was used to save the simulated dataset in Parquet format, ensuring compatibility and efficiency during analysis. This approach also allowed seamless integration with the real TTC data.
+This dataset was selected for its level of detail and public accessibility, which align with the research goal of reproducibility and transparency. Alternative datasets, such as internal TTC reports or proprietary transit data, were considered but were unavailable due to licensing restrictions and limited public access. Open Data Toronto, combined with R packages like `opendatatoronto` [@citeOpendatatoronto] and `tidyverse` [@citeTidyverse], enabled seamless integration and analysis.
 
 ## Measurement
-### Variables and Definitions
-The dataset incorporates several key variables central to understanding TTC delays, ensuring comprehensive coverage of transit operations across different modes and geographic locations. These variables capture real-world phenomena and translate them into structured data entries for analysis:
+The TTC delay dataset translates real-world transit disruptions into structured data entries to facilitate an analysis of operational patterns and predictors of service reliability. Key variables include min_delay, min_gap, mode, bound, and location, each capturing distinct dimensions of transit performance. These variables collectively enable a comprehensive examination of delay dynamics across Toronto’s public transit system.
 
--min_delay: Represents the minimum delay in minutes for a given transit trip. This variable serves as the primary outcome measure and reflects service disruptions, ranging from minor delays to significant interruptions.
--min_gap: Captures the minimum time gap (in minutes) between consecutive vehicles on the same transit route, offering insight into service regularity.
--mode: Identifies the type of transit service (Bus, Subway, or Streetcar) associated with each delay. Differences in infrastructure and service management across modes necessitate their inclusion.
--bound: Denotes the direction of travel (North, South, East, West). This variable enables exploration of geographic or directional influences on delays.
--location: Specifies the geographic context of each delay. This study focuses on two key locations: Dundas (representing downtown Toronto) and Yorkdale (a suburban area), allowing for urban-suburban comparisons.
-These variables were chosen based on their relevance to operational challenges and passenger experiences within the TTC system.
+The primary outcome variable, min_delay, represents the delay duration in minutes for each transit trip. This measure reflects the extent of service disruptions, ranging from brief delays to significant interruptions. It serves as a critical metric for assessing the impact of delays on the TTC system's overall reliability. The companion variable, min_gap, quantifies the time gap between consecutive vehicles on the same route, providing insights into service regularity and scheduling efficiency.
 
-### Data Collection and Processing
-Real-World Data
-The real-world dataset obtained from Open Data Toronto provides structured records of TTC delays for 2024. Although detailed documentation on data collection methodologies is not available, it is reasonable to infer that the dataset aggregates reports from TTC’s automated systems and manual logs, consistent with modern transit data practices [@citeLitman2023; @citeCats2017]. Each record captures delay duration, transit mode, and directional information, offering granular insights into service performance.
+The mode variable categorizes the type of transit service—bus, subway, or streetcar—capturing operational differences shaped by infrastructure, traffic interactions, and service management. The bound variable specifies the direction of travel, such as North, South, East, or West, enabling an exploration of geographic and directional influences on delays. Finally, the location variable focuses on key geographic contexts, highlighting patterns in urban (Dundas) and suburban (Yorkdale) settings. This geographic distinction is central to understanding variations in delay dynamics across different transit environments.
 
-Simulated Data
-The simulated dataset was constructed to mimic real-world delay patterns while enabling controlled experimentation. Simulations were based on key assumptions derived from transit studies [@citeLitman2023; @citeHess2007]:
+Although the dataset does not provide explicit documentation of its collection methods, it is reasonable to infer that the TTC aggregates data through automated monitoring systems, supplemented by manual reporting. Automated data collection likely includes feeds from vehicle tracking systems, GPS technology, and onboard sensors, while manual logs may capture incidents that are not automatically detected. This dual approach ensures a detailed record of service performance, consistent with contemporary transit data practices [@citeLitman2023; @citeCats2017].
 
-- Bus delays were distributed with greater variance, reflecting their exposure to traffic and road conditions.
-- Subway delays were concentrated around specific ranges, representing infrastructure-dependent disruptions like signal failures.
-- Streetcar delays reflected mixed traffic interactions, with distributions skewed toward moderate delays.
+The structured nature of the dataset allows for nuanced analyses of delay patterns and their operational drivers. Each variable was selected to capture essential aspects of transit performance, transforming complex real-world phenomena into analyzable components. This structured data foundation enables a systematic exploration of factors influencing TTC delays and offers insights to inform transit planning and operational improvements.
 
-### Handling Missing and Invalid Data
-To ensure data integrity, all cleaning and preprocessing steps were performed using R [@citeR], with the assistance of tidyverse [@citeTidyverse], dplyr [@citeDplyr], and `stringr` [@citeStringr]. Specific measures included:
-
-- Invalid Bound Values: Entries with undefined or erroneous bound values were removed.
-- Missing Delay Metrics: Observations missing min_delay or min_gap were excluded, as these variables are critical to the analysis.
-- Outliers: Delay values exceeding operational thresholds (e.g., 24 hours) were flagged and reviewed for plausibility.
+A datasheet is available for viewing through the repository this paper is associated with.
 
 ## Outcome Variables
-The key outcome variables analyzed in this study are min_delay and min_gap. These variables provide critical insights into service disruptions and regularity across transit modes, geographic locations, and time.
+The outcome variable analyzed in this study, min_delay, represents the delay experienced by transit vehicles in minutes. This variable is critical for understanding service disruptions in the Toronto Transit Commission (TTC) system. By modeling min_delay, the analysis aims to quantify delay patterns and identify key factors influencing transit reliability across different modes, geographic locations, and temporal contexts.
 
-### Minimum Delay (min_delay)
-min_delay measures the minimum delay recorded for a given transit trip, expressed in minutes. It represents the most significant performance indicator of service disruptions across the TTC system. This variable enables the identification of trends in delay magnitude and highlights areas or modes requiring operational improvements.
+### Delay Duration (min_delay)
+The min_delay variable measures the recorded delay for a transit trip, expressed in minutes. It serves as a key indicator of service performance, enabling the identification of delay trends and areas requiring operational improvements. As shown in @tbl-min_delay_summary, the summary statistics for min_delay provide insights into the central tendency and variability of transit delays across the dataset.
 
 ```{r}
 #| label: tbl-min_delay_summary
-#| tbl-cap: "Summary statistics for minimum delay (min_delay)"
+#| tbl-cap: "Summary statistics for delay duration (min_delay, in minutes)"
 #| echo: false
 #| warning: false
 #| message: false
 
-# Simulating example summary statistics for visualization purposes
-min_delay_summary <- data.frame(
-  Statistic = c("Minimum", "Maximum", "Mean", "Median", "Standard Deviation"),
-  Value = c(0, 120, 15.7, 10, 12.5)
-)
+min_delay_summary <- cleaned_data %>%
+  summarise(
+    Statistic = c("Shortest Delay (mins)", "Longest Delay (mins)", "Average Delay (mins)", "Median Delay (mins)", "Standard Deviation (mins)"),
+    Value = c(
+      round(min(min_delay, na.rm = TRUE), 3),
+      round(max(min_delay, na.rm = TRUE), 3),
+      round(mean(min_delay, na.rm = TRUE), 3),
+      round(median(min_delay, na.rm = TRUE), 3),
+      round(sd(min_delay, na.rm = TRUE), 3)
+    )
+  )
 
 knitr::kable(
   min_delay_summary,
@@ -104,41 +119,185 @@ knitr::kable(
 )
 
 ```
-The min_delay variable ranges from 0 minutes (indicating no delay) to a maximum of 120 minutes. The mean delay is approximately 15.7 minutes, with a median of 10 minutes, suggesting that most delays are relatively short but with occasional extreme values. The standard deviation of 12.5 indicates moderate variability in delays across the TTC system.
+The table indicates that min_delay ranges from 0 minutes (indicating no delay) to a maximum of 975 minutes, with a mean delay of 15.614 minutes and a median of 10 minutes. The standard deviation of 44.856 reflects substantial variability in delay durations, suggesting that while many delays are relatively short, there are significant outliers with extreme delay durations.
+  
+@fig-min_delay_distribution visualizes the distribution of min_delay using a histogram, highlighting the variable’s central tendency and spread.
 
 ```{r}
 #| label: fig-min_delay_distribution
-#| fig-cap: "Distribution of minimum delay (min_delay)"
+#| fig-cap: "Distribution of delay durations (min_delay, in minutes, capped at 100)"
 #| echo: false
 #| warning: false
 #| message: false
-#| fig-width: 4
 
-# Example boxplot code
-ggplot(data.frame(min_delay = rnorm(1000, mean = 15, sd = 12)), aes(x = "", y = min_delay)) +
-  geom_boxplot(fill = "skyblue", alpha = 0.7) +
-  labs(y = "Minimum Delay (minutes)", x = "") +
+# Remove extreme outliers
+filtered_data <- cleaned_data %>%
+  filter(min_delay <= 100)  # Only include delays of 100 minutes or less
+
+# Plot the histogram
+ggplot(filtered_data, aes(x = min_delay)) +
+  geom_histogram(binwidth = 5, fill = "#2E86C1", color = "white", alpha = 0.8) +
+  labs(
+    x = "Delay Duration (minutes)",
+    y = "Frequency"
+  ) +
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) +
+  scale_y_continuous(expand = c(0, 0)) +
   theme_minimal() +
-  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
 
 ```
-The boxplot highlights the central tendency of min_delay, as well as the range and any potential outliers.
+The histogram visualizes the distribution of min_delay after removing extreme outliers (values above 100 minutes). As shown in @fig-min_delay_distribution, the majority of delay durations are concentrated within the range of 0–30 minutes, with a notable peak around the mean and median of approximately 10 minutes. Extreme delays above 100 minutes were excluded for clarity, as these cases are rare and could skew the visualization.
 
-### Minimum Gap (min_gap)
-min_gap represents the time gap between consecutive vehicles on the same transit route, measured in minutes. It provides insight into service regularity, particularly for modes like streetcars and buses, where consistent intervals are crucial to operational efficiency.
+## Predictor Variables
+The predictor variables include mode, location, bound, day_of_week, and min_gap. Mode captures the type of transit service—bus, streetcar, or subway—each with distinct operational dynamics influencing delay patterns. Location identifies where delays occur, focusing on DUNDAS, YORKDALE, and OTHER, to explore differences between urban and suburban transit environments. The bound variable specifies the direction of travel—north, south, east, or west—highlighting geographic and directional influences on delays. Temporal factors are represented by day_of_week, allowing an analysis of delay patterns across weekdays and weekends. Finally, min_gap measures the time gap between consecutive vehicles on the same route, reflecting service regularity and its impact on operational performance.
 
+### Mode of Transit
+The mode variable captures the type of transit service (Bus, Subway, or Streetcar) and reflects the distinct operational challenges associated with each mode. Buses contend with external factors such as road traffic, weather, and construction, leading to frequent and highly variable delays. Subways are typically influenced by infrastructure issues like signal failures and mechanical disruptions, resulting in relatively shorter and more concentrated delays. Streetcars, operating in mixed traffic, encounter delays from route congestion and shared road usage.
+
+@tbl-mode_delay_summary presents a summary of delay statistics for each transit mode, including average, median, maximum, and minimum delays, along with standard deviations.
 ```{r}
-#| label: tbl-min_gap_summary
-#| tbl-cap: "Summary statistics for minimum gap (min_gap)"
+#| label: tbl-mode_delay_summary
+#| tbl-cap: "Summary statistics for delays by transit mode (in minutes)"
 #| echo: false
 #| warning: false
 #| message: false
 
-# Simulating example summary statistics for visualization purposes
-min_gap_summary <- data.frame(
-  Statistic = c("Minimum", "Maximum", "Mean", "Median", "Standard Deviation"),
-  Value = c(1, 30, 7.4, 5, 4.3)
+mode_delay_summary <- cleaned_data %>%
+  group_by(mode) %>%
+  summarise(
+    Average_Delay = round(mean(min_delay, na.rm = TRUE), 3),
+    Median_Delay = median(min_delay, na.rm = TRUE),
+    Max_Delay = max(min_delay, na.rm = TRUE),
+    Min_Delay = min(min_delay, na.rm = TRUE),
+    Std_Dev = round(sd(min_delay, na.rm = TRUE), 3)
+  )
+
+knitr::kable(
+  mode_delay_summary,
+  col.names = c("Transit Mode", "Average Delay", "Median Delay", "Max Delay", "Min Delay", "Std Dev"),
+  booktabs = TRUE
 )
+
+```
+As shown in @tbl-mode_delay_summary, buses experience the highest average delay (21.273 minutes) and the greatest variability, with a standard deviation of 54.51 minutes. Streetcars follow with an average delay of 15.477 minutes and a slightly lower standard deviation of 32.713 minutes. Subways show the lowest average delay of just 2.806 minutes, underscoring the relative reliability of rail-based transit compared to road-based services. These findings highlight the disproportionate impact of external factors like road congestion on buses and streetcars.
+
+### Geographic Location
+The location variable provides a geographic lens for analyzing delays, focusing on two key areas: Dundas (an urban, high-traffic area) and Yorkdale (a suburban area with less frequent service). This variable allows for a comparison of transit performance in urban versus suburban contexts, offering insights into how population density and service frequency affect delays.
+
+@tbl-location_summary summarizes delay statistics for each location, capturing key metrics like average delay, median delay, and variability.
+\newpage
+```{r}
+#| label: tbl-location_summary
+#| tbl-cap: "Summary statistics for the predictor variable (location)"
+#| echo: false
+#| warning: false
+#| message: false
+
+location_delay_summary <- cleaned_data %>%
+  group_by(location) %>%
+  summarise(
+    Average_Delay = round(mean(min_delay, na.rm = TRUE), 3),
+    Median_Delay = median(min_delay, na.rm = TRUE),
+    Max_Delay = max(min_delay, na.rm = TRUE),
+    Min_Delay = min(min_delay, na.rm = TRUE),
+    Std_Dev = round(sd(min_delay, na.rm = TRUE), 3)
+  )
+
+knitr::kable(
+  location_delay_summary,
+  col.names = c("Location", "Average Delay", "Median Delay", "Max Delay", "Min Delay", "Std Dev"),
+  booktabs = TRUE
+)
+
+```
+According to @tbl-location_summary, Dundas exhibits slightly higher average delays (13.491 minutes) than Yorkdale (11.521 minutes), with a standard deviation of 31.966 minutes compared to Yorkdale's 23.821 minutes. This suggests that urban environments like Dundas experience more variable and longer delays due to higher transit demand and traffic density. In contrast, Yorkdale benefits from lower demand and more predictable traffic conditions.
+
+### Directionality
+The bound variable identifies the travel direction (North, South, East, or West) of delayed transit vehicles. This dimension helps uncover localized bottlenecks or infrastructure-related issues that may disproportionately affect certain routes.
+
+@tbl-bound_delay_summary provides a detailed breakdown of delay statistics by direction.
+```{r}
+#| label: tbl-bound_delay_summary
+#| tbl-cap: "Summary statistics for delays by directional bound (in minutes)"
+#| echo: false
+#| warning: false
+#| message: false
+
+bound_delay_summary <- cleaned_data %>%
+  filter(!is.na(bound)) %>% # Exclude rows where 'bound' is NA
+  group_by(bound) %>%
+  summarise(
+    Average_Delay = round(mean(min_delay, na.rm = TRUE), 3),
+    Median_Delay = median(min_delay, na.rm = TRUE),
+    Max_Delay = max(min_delay, na.rm = TRUE),
+    Min_Delay = min(min_delay, na.rm = TRUE),
+    Std_Dev = round(sd(min_delay, na.rm = TRUE), 3)
+  )
+
+knitr::kable(
+  bound_delay_summary,
+  col.names = c("Direction", "Average Delay", "Median Delay", "Max Delay", "Min Delay", "Std Dev"),
+  booktabs = TRUE
+)
+
+```
+As shown in @tbl-bound_delay_summary, delays are relatively consistent across directions, with average delays ranging from 14.742 minutes (South) to 17.252 minutes (North). However, the standard deviation varies across directions, with the Northbound direction showing the greatest variability (49.128 minutes). These findings may reflect differences in route infrastructure, traffic bottlenecks, or operational scheduling.
+
+### Temporal Factors
+Temporal factors, captured by the day of the week, provide insights into how commuter and recreational travel patterns influence transit delays. Weekday delays typically reflect peak commuter traffic, while weekend delays may indicate reduced service levels or unique traffic patterns tied to recreational activities.
+
+@tbl-dow_delay_summary presents the summary statistics for delays by day of the week, highlighting differences in average delay, variability, and extreme values.
+```{r}
+#| label: tbl-dow_delay_summary
+#| tbl-cap: "Summary statistics for delays by day of the week (in minutes)"
+#| echo: false
+#| warning: false
+#| message: false
+
+dow_delay_summary <- cleaned_data %>%
+  group_by(day_of_week) %>%
+  summarise(
+    Average_Delay = round(mean(min_delay, na.rm = TRUE), 3),
+    Median_Delay = median(min_delay, na.rm = TRUE),
+    Max_Delay = max(min_delay, na.rm = TRUE),
+    Min_Delay = min(min_delay, na.rm = TRUE),
+    Std_Dev = round(sd(min_delay, na.rm = TRUE), 3)
+  )
+
+knitr::kable(
+  dow_delay_summary,
+  col.names = c("Day of Week", "Average Delay", "Median Delay", "Max Delay", "Min Delay", "Std Dev"),
+  booktabs = TRUE
+)
+
+```
+According to @tbl-dow_delay_summary, average delays are relatively consistent across weekdays, peaking slightly on Monday (15.916 minutes) and Friday (15.649 minutes). The standard deviations for weekdays, such as Monday (48.686 minutes) and Friday (45.056 minutes), indicate substantial variability in delays during peak commuter periods. Weekend delays are slightly lower on average, with Saturday showing the lowest average delay (14.748 minutes) and reduced variability (39.019 minutes). These patterns align with the expected reduction in transit demand and traffic congestion during weekends.
+
+### Time Gap Between Vehicles (min_gap)
+The min_gap variable captures the time gap (in minutes) between consecutive vehicles on the same route, providing insight into service regularity. Maintaining consistent gaps is crucial for operational efficiency and minimizing passenger wait times. @tbl-min_gap_summary presents the summary statistics for min_gap.
+```{r}
+#| label: tbl-min_gap_summary
+#| tbl-cap: "Summary statistics for time gaps between vehicles (min_gap, in minutes)"
+#| echo: false
+#| warning: false
+#| message: false
+
+min_gap_summary <- cleaned_data %>%
+  summarise(
+    Statistic = c("Shortest Gap (mins)", "Longest Gap (mins)", "Average Gap (mins)", "Median Gap (mins)", "Standard Deviation (mins)"),
+    Value = c(
+      round(min(min_gap, na.rm = TRUE), 3),
+      round(max(min_gap, na.rm = TRUE), 3),
+      round(mean(min_gap, na.rm = TRUE), 3),
+      round(median(min_gap, na.rm = TRUE), 3),
+      round(sd(min_gap, na.rm = TRUE), 3)
+    )
+  )
 
 knitr::kable(
   min_gap_summary,
@@ -147,317 +306,747 @@ knitr::kable(
 )
 
 ```
-The min_gap variable ranges from a minimum of 1 minute to a maximum of 30 minutes, with a mean of 7.4 minutes and a median of 5 minutes. The standard deviation of 4.3 minutes indicates variability in service regularity, reflecting factors such as traffic conditions and route-specific challenges.
+The data indicates that min_gap ranges from 0 to 997 minutes, with an average time gap of 24.438 minutes and a median of 19 minutes. A standard deviation of 47.659 reflects substantial variability, likely influenced by external factors such as traffic congestion, irregular vehicle arrivals, and operational inefficiencies. The presence of extremely high values, such as 997 minutes, suggests rare but significant disruptions that may warrant further investigation or exclusion in detailed analyses.
 
+@fig-min_gap_distribution depicts the distribution of min_gap, using a histogram to illustrate common intervals and variability.
 ```{r}
 #| label: fig-min_gap_distribution
-#| fig-cap: "Distribution of minimum gap (min_gap)"
+#| fig-cap: "Distribution of time gaps between vehicles (min_gap, in minutes)"
 #| echo: false
 #| warning: false
 #| message: false
-#| fig-width: 4
 
-# Example histogram code
-ggplot(data.frame(min_gap = rnorm(1000, mean = 7, sd = 4)), aes(x = min_gap)) +
-  geom_histogram(binwidth = 1, fill = "orange", color = "black", alpha = 0.7) +
-  labs(x = "Minimum Gap (minutes)", y = "Frequency") +
-  theme_minimal()
-
-```
-The histogram reveals the frequency of various min_gap values, emphasizing common intervals and potential irregularities.
-
-## Predictor Variables
-The dataset includes several predictor variables that influence transit delays across the TTC system. These variables provide insights into operational and contextual factors affecting transit performance.
-
-### Mode of Transit
-The mode variable identifies the type of transit service experiencing delays: Bus, Subway, or Streetcar. Each mode operates under distinct conditions, such as infrastructure, traffic interactions, and scheduling practices, which impact delay patterns:
-
-- Bus: Delays are often influenced by road traffic, weather, and construction.
-- Subway: Delay patterns are driven by signal failures, overcrowding, or mechanical issues.
-- Streetcar: Delays can arise from shared road use, mixed traffic conditions, and route congestion.
-
-```{r}
-#| label: fig-mode_distribution
-#| fig-cap: "Distribution of delays by mode of transit"
-#| echo: false
-#| warning: false
-#| message: false
-#| fig-width: 4
-
-# Example data and bar plot for visualization
-example_mode_data <- data.frame(
-  mode = c("Bus", "Subway", "Streetcar"),
-  delay_count = c(500, 300, 200)
-)
-
-ggplot(example_mode_data, aes(x = mode, y = delay_count, fill = mode)) +
-  geom_bar(stat = "identity", alpha = 0.8) +
-  labs(x = "Mode of Transit", y = "Number of Delays", fill = "Mode") +
-  theme_minimal()
+ggplot(cleaned_data, aes(x = min_gap)) +
+  geom_histogram(binwidth = 10, fill = "#FF5733", color = "white", alpha = 0.8) +
+  labs(
+    x = "Time Gap Between Vehicles (minutes)",
+    y = "Frequency"
+  ) +
+  scale_x_continuous(limits = c(0, 200), breaks = seq(0, 200, by = 20)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
 
 ```
-The chart shows that buses experience the highest number of delays, followed by subways and streetcars, highlighting the challenges associated with road-based transit.
+The histogram illustrates that the majority of min_gap values fall within the 15–30 minute range, with a noticeable peak around 20 minutes. While most values are clustered within this interval, there are occasional larger gaps that extend up to 100 minutes, reflecting variability in service intervals. These deviations may highlight operational inconsistencies or external disruptions affecting transit schedules.
 
-### Geographic Location
-The location variable captures the geographic context of each delay, focusing on two key locations:
+# Methods {#sec-methods}
+This section outlines the methodology employed to analyze patterns in Toronto Transit Commission (TTC) delays (min_delay) using a Random Forest model. By leveraging an ensemble approach, the Random Forest effectively handles nonlinear relationships and interactions between predictors, providing robust predictions for delay durations across diverse transit contexts.
 
-Dundas: A downtown area with high passenger volumes and frequent service intervals.
-Yorkdale: A suburban area with less dense transit operations.
-
-```{r}
-#| label: fig-location_comparison
-#| fig-cap: "Comparison of delays at Dundas and Yorkdale"
-#| echo: false
-#| warning: false
-#| message: false
-#| fig-width: 4
-
-# Example scatterplot for delays by location
-example_location_data <- data.frame(
-  location = rep(c("Dundas", "Yorkdale"), each = 100),
-  min_delay = c(rnorm(100, mean = 20, sd = 5), rnorm(100, mean = 10, sd = 3))
-)
-
-ggplot(example_location_data, aes(x = location, y = min_delay, color = location)) +
-  geom_jitter(alpha = 0.6, width = 0.2) +
-  labs(x = "Location", y = "Minimum Delay (minutes)", color = "Location") +
-  theme_minimal()
-
-```
-The scatterplot highlights that Dundas generally experiences longer delays compared to Yorkdale, consistent with its higher transit demand and urban density.
-
-### Directionality
-The bound variable specifies the travel direction (North, South, East, or West) of delayed transit vehicles. Directional analysis is valuable for identifying localized bottlenecks or infrastructure-related delays.
-
-```{r}
-#| label: fig-bound_distribution
-#| fig-cap: "Distribution of delays by direction"
-#| echo: false
-#| warning: false
-#| message: false
-#| fig-width: 4
-
-# Example data and bar plot for directional delays
-example_bound_data <- data.frame(
-  bound = c("North", "South", "East", "West"),
-  delay_count = c(250, 200, 150, 100)
-)
-
-ggplot(example_bound_data, aes(x = bound, y = delay_count, fill = bound)) +
-  geom_bar(stat = "identity", alpha = 0.8) +
-  labs(x = "Direction", y = "Number of Delays", fill = "Direction") +
-  theme_minimal()
-
-```
-
-### Temporal Factors
-Temporal patterns in transit delays are captured by variables indicating the day of the week. These patterns reflect differences in commuter and recreational travel, as well as operational adjustments during weekends.
-
-```{r}
-#| label: fig-temporal_patterns
-#| fig-cap: "Average delays by day of the week"
-#| echo: false
-#| warning: false
-#| message: false
-#| fig-width: 5
-
-# Example data and line plot for temporal analysis
-example_temporal_data <- data.frame(
-  day = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"),
-  avg_delay = c(15, 18, 20, 22, 25, 12, 10)
-)
-
-ggplot(example_temporal_data, aes(x = day, y = avg_delay, group = 1)) +
-  geom_line(color = "blue", size = 1) +
-  geom_point(color = "red", size = 2) +
-  labs(x = "Day of the Week", y = "Average Delay (minutes)") +
-  theme_minimal()
-
-```
-The graph indicates higher average delays during weekdays, particularly Thursday and Friday, reflecting peak commuter traffic.
-
-# Methods
-This section describes the methodological framework employed to analyze patterns of TTC delays in Toronto's public transit system. The study integrates data cleaning, exploratory data analysis (EDA), and predictive modeling to uncover insights into factors influencing delays.
-
-## Overview of Workflow
-The analysis follows a systematic workflow:
-
-1. Data Preparation: Data from Open Data Toronto and simulated datasets were cleaned and standardized using the `tidyverse` [@citeTidyverse] and `opendatatoronto` [@citeOpendatatoronto] packages. Missing values were addressed through imputation, and categorical variables were appropriately encoded.
-
-2. Exploratory Data Analysis (EDA): Descriptive statistics and visualizations were generated to examine patterns across key variables, such as min_delay, mode, location, and bound.
-
-3. Predictive Modeling: A random forest model was developed using the `caret` [@citeCaret] and `randomForest` [@citeRandomForest] packages to predict delays, focusing on transit mode and temporal factors as predictors.
-
-4. Model Validation and Diagnostics: Model performance was evaluated using metrics such as RMSE and $R^2$. Diagnostic plots were employed to ensure model assumptions were met.
-
-## Exploratory Data Analysis (EDA)
-EDA was conducted to understand the dataset's structure and identify trends that would inform the modeling phase. Key steps included:
-
-1. Summary Statistics: Variables such as min_delay, min_gap, and bound were summarized to identify central tendencies and variability. Temporal variables like day_of_week were examined for recurring patterns.
-
-2. Visualization: Graphical techniques, including heatmaps, bar charts, and line plots, were used to identify correlations and trends. For example:
-   - Line graphs were used to compare average delays across days of the week.
-   - Heatmaps revealed the spatial distribution of delays by location.
-
-This analysis highlighted operational bottlenecks, such as higher delays during peak hours and specific transit modes (e.g., streetcars).
-
-## Predictive Modeling
-### Model Selection
-A random forest model was selected for its ability to handle high-dimensional data and capture complex relationships between predictors and the outcome variable. The model predicts min_delay using key features such as mode, location, bound, and day_of_week.
-
-### Feature Engineering
-Predictor variables were carefully prepared:
-- Categorical Variables: Factors like mode (bus, subway, streetcar) and bound (North, South, East, West) were encoded to enhance interpretability.
-- Temporal Variables: day_of_week was included to capture variations in delays due to commuting patterns.
-- Interaction Terms: Potential interactions between mode and location were tested to account for geographic influences on transit delays.
-
-### Implementation
-The model was implemented in R using the `caret` package for preprocessing and hyperparameter tuning. Grid search with cross-validation was applied to optimize parameters, such as the number of trees and maximum depth.
+## Model Overview
+The goal of the model is to predict the delay duration (min_delay) in minutes for TTC transit vehicles using the following predictors:
 
 $$
-\text{Random Forest Model:} \quad \hat{y} = f(\text{mode}, \text{location}, \text{bound}, \text{day\_of\_week})
+\text{min\_delay} \sim \text{mode} + \text{location} + \text{bound} + \text{day\_of\_week} + \text{min\_gap}\tag{1}
 $$
 
 Where:
 
-- $\hat{y}$ is the predicted delay (in minutes),
-- $f$ represents the random forest function, and
-- The predictors include transit mode, location, direction, and temporal attributes.
+- **mode**: The transit mode (Bus, Streetcar, or Subway).
+- **location**: Geographic location (Dundas, Yorkdale, or Other).
+- **bound**: Travel direction (North, South, East, or West).
+- **day_of_week**: Day of the week (Monday through Sunday).
+- **min_gap**: Time gap between vehicles in minutes, representing service regularity.
 
-## Validation and Diagnostics
-The model's performance was evaluated through several measures:
-1. Performance Metrics:
-  - Root Mean Squared Error (RMSE): Assessed the average error in predicting delays.
-  - R-squared ($R^2$): Measured the proportion of variance in min_delay explained by the predictors.
-2. Residual Analysis:
-  - Residual plots were examined for patterns indicating bias or underfitting.
-3. Feature Importance:
-  - Feature importance scores were derived to determine the most influential predictors. For instance, mode and day_of_week emerged as significant contributors.
+## Training and Validation
+To ensure robust performance, the dataset was split into training (80%) and testing (20%) sets using stratified sampling to maintain the distribution of 
+min_delay
+min_delay. The training set was used to build the Random Forest model, while the testing set evaluated its predictive accuracy.
 
-# Results
-This section presents the findings from exploratory data analysis (EDA) and the predictive modeling process. Key trends, relationships, and model performance metrics are highlighted to address the research objectives.
+The model was implemented in R using the randomForest package, with the number of trees (`ntree`) set to 500. This parameter balances computational efficiency and model stability by ensuring sufficient averaging across trees.
+$$
+\hat{y}_i = \frac{1}{T} \sum_{t=1}^{T} f_t(\mathbf{x}_i)\tag{2}
+$$
 
-## Exploratory Findings
+Where:
 
-### Delay Patterns by Location
-Delays exhibit notable differences between Dundas (downtown) and Yorkdale (suburban). The following figure compares the distribution of min_delay across these two locations:
+- $\hat{y}_i$: Predicted delay for observation $i$.
+- $T$: Total number of trees ($T = 500$).
+- $f_t(\mathbf{x}_i)$: Prediction from tree $t$ based on predictors $\mathbf{x}_i$.
+
+The model hyperparameters, including the default number of predictors sampled at each split ($\sqrt{p}$, where $p$ is the number of predictors), were kept unchanged, as they offered a balanced trade-off between bias and variance.
+
+## Evaluation Metrics
+The model’s performance was assessed using:
+
+- **Root Mean Squared Error (RMSE):**
+$$
+\text{RMSE} = \sqrt{\frac{1}{n} \sum_{i=1}^{n} \left(\hat{y}_i - y_i\right)^2}\tag{3}
+$$
+Where $n$ is the number of observations, $y_i$ is the observed delay, and $\hat{y}_i$ is the predicted delay.
+
+- **Coefficient of Determination ($R^2$):**
+$$
+R^2 = 1 - \frac{\sum_{i=1}^{n} \left(y_i - \hat{y}_i\right)^2}{\sum_{i=1}^{n} \left(y_i - \bar{y}\right)^2}\tag{4}
+$$
+This measures the proportion of variance in the observed data explained by the model. Values close to 1 indicate strong predictive performance.
+
+## Model Justification, Assumptions, and Limitations
+The Random Forest regression model was selected for its ability to handle the diverse and nonlinear relationships within the dataset, making it the most suitable choice for analyzing TTC delays. This model is particularly effective at capturing complex interactions between predictors, such as transit mode and day of the week, which influence delay durations.
+
+The justification for using Random Forest lies in its ability to model nonlinear relationships without assuming specific functional forms. Unlike linear regression, which oversimplifies these relationships, Random Forest accommodates interactions between predictors and provides robust predictions even in the presence of multicollinearity. For example, the influence of min_gap on delays is not consistent across different transit modes, a pattern that Random Forest can identify and model effectively. Additionally, the algorithm provides feature importance metrics, offering interpretable insights into the drivers of delays, such as mode, location, and day_of_week.
+
+Alternative models, such as linear regression, were considered but found to be insufficient for this analysis. Linear regression assumes linear relationships and independence between predictors, leading to poor performance metrics, including lower $R^2$ values and higher RMSE scores, when applied to this dataset. These results highlighted the need for a more flexible model, prompting the selection of Random Forest.
+
+Key predictors were evaluated for their importance using the Mean Decrease in Accuracy (MDA) metric, which measures the reduction in predictive accuracy when a variable is excluded. This analysis, performed using the `randomForest` package [@citeRandomForest], revealed that min_gap (time between consecutive vehicles) and mode (transit type) were the most significant predictors. The prominence of min_gap underscores its role in service regularity, while the importance of mode reflects the operational differences among buses, subways, and streetcars. Other influential predictors included day_of_week and location, capturing temporal and geographic dimensions of delays.
+
+While Random Forest excelled in its predictive capabilities, the model operates under several assumptions and faces certain limitations. First, although it handles outliers better than simpler models, extreme values, such as exceptionally high min_gap durations, can still affect individual tree predictions. These outliers were mitigated during preprocessing (see [@sec-data-cleaning]). Second, the model is less interpretable compared to linear regression, as it does not provide straightforward coefficients for predictors. Feature importance metrics were used to partially address this limitation. Third, Random Forest can be sensitive to imbalances in predictor distributions, such as fewer observations for specific locations or directional bounds. Careful data cleaning and preprocessing steps were implemented to reduce this bias.
+
+Despite its strengths, the model has limitations in its applicability. For example, it may struggle with extreme imbalances in predictor distributions or scenarios requiring highly interpretable predictions. Future work could explore ensemble methods that integrate Random Forest with more interpretable models to address these challenges. The comprehensive evaluation and selection process affirm the Random Forest model as the best fit for understanding and predicting TTC delays.
+
+See [@sec-model-details] for additional details.
+
+# Results {#sec-results}
+## Visualizing Delays
+
+@fig-delays_by_location illustrates the average delay duration across three key Toronto locations: Dundas, Yorkdale, and "Other." The figure shows distinct variations in delay durations, with Other locations experiencing the longest delays, averaging 15.7 minutes, compared to 13.5 minutes at Dundas and 11.5 minutes at Yorkdale. These results suggest that factors specific to "Other" locations, such as less efficient transit infrastructure or increased congestion, contribute to higher delays. Conversely, Yorkdale exhibits relatively shorter delays, which could reflect better-managed transit operations or reduced traffic volume in the area.
 ```{r}
-#| label: fig-delay_by_location
-#| fig-cap: "Distribution of minimum delay (min_delay) by location"
+#| label: fig-delays_by_location
+#| fig-cap: "Average delays across Toronto locations, with average delay values annotated."
 #| echo: false
 #| warning: false
 #| message: false
-#| fig-width: 4
 
-# Simulated data for visualization
-example_delay_location <- data.frame(
-  location = rep(c("Dundas", "Yorkdale"), each = 200),
-  min_delay = c(rnorm(200, mean = 25, sd = 10), rnorm(200, mean = 15, sd = 8))
-)
+avg_delay_by_location <- cleaned_data %>%
+  group_by(location) %>%
+  summarise(avg_delay = mean(min_delay, na.rm = TRUE))
 
-ggplot(example_delay_location, aes(x = location, y = min_delay, fill = location)) +
-  geom_boxplot(alpha = 0.7) +
-  labs(x = "Location", y = "Minimum Delay (minutes)", fill = "Location") +
-  theme_minimal()
+ggplot(avg_delay_by_location, aes(x = location, y = avg_delay, fill = location)) +
+  geom_col(width = 0.6, alpha = 0.8) +
+  geom_text(aes(label = round(avg_delay, 1)), vjust = 2, size = 4) +
+  labs(
+    x = "Location",
+    y = "Average Delay Duration (minutes)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    legend.position = "none"
+  )
+
 
 ```
-The figure reveals that Dundas experiences longer delays on average compared to Yorkdale, likely due to higher transit demand and traffic congestion in urban areas.
 
-### Temporal Trends
-The average delay varies significantly across days of the week, reflecting commuter and non-commuter patterns. A line plot of average delays by day is shown below:
+@fig-temporal_trends_adjusted highlights the temporal trends in average TTC delays across the days of the week. Mondays show the highest average delays (15.9 minutes), potentially due to increased traffic demand as the workweek begins. Saturdays see the lowest average delays (14.7 minutes), aligning with reduced commuter traffic during weekends. While the variations in delays across days are relatively small, these findings emphasize the subtle but consistent influence of weekly transit demand patterns on delay durations.
 ```{r}
-#| label: fig-temporal_trends
-#| fig-cap: "Average delays by day of the week"
+#| label: fig-temporal_trends_adjusted
+#| fig-cap: "Temporal trends in TTC delays, with average delay values annotated."
 #| echo: false
 #| warning: false
 #| message: false
-#| fig-width: 5
 
-# Simulated data for visualization
-example_temporal <- data.frame(
-  day = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"),
-  avg_delay = c(18, 20, 22, 25, 30, 15, 12)
-)
+avg_delay_by_day <- cleaned_data %>%
+  group_by(day_of_week) %>%
+  summarise(avg_delay = mean(min_delay, na.rm = TRUE))
 
-ggplot(example_temporal, aes(x = day, y = avg_delay, group = 1)) +
-  geom_line(color = "blue", size = 1.2) +
-  geom_point(color = "red", size = 2) +
-  labs(x = "Day of the Week", y = "Average Delay (minutes)") +
-  theme_minimal()
+ggplot(avg_delay_by_day, aes(x = day_of_week, y = avg_delay, group = 1)) +
+  geom_line(color = "darkblue", size = 1.2) +
+  geom_point(color = "red", size = 3) +
+  geom_text(aes(label = round(avg_delay, 1)), vjust = 1.3, hjust = 1.4, size = 3) +
+  labs(
+    x = "Day of the Week",
+    y = "Average Delay Duration (minutes)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
 
 ```
-Delays peak on Thursdays and Fridays, consistent with commuter traffic patterns, and drop during weekends.
 
-## Modeling Results
-### Predictive Accuracy
-The random forest model demonstrated strong predictive performance for min_delay. Key metrics include:
-
-Root Mean Squared Error (RMSE): 8.5 minutes
-  - R-squared ($R^2$): 0.82
-  - These results indicate that the model explains 82% of the variance in min_delay, with an average prediction error of 8.5 minutes.
-  
-### Significant Predictors
-The model’s feature importance scores highlight the relative contribution of each predictor:
+The distribution of delays across different transit modes—bus, streetcar, and subway—is presented in @fig-delay_by_mode. Buses exhibit the most variability, with delays ranging from a few minutes to over 750 minutes, likely due to their exposure to road traffic and weather conditions. Streetcars show moderate delays, reflecting their shared use of road infrastructure but also benefiting from dedicated tracks in certain areas. Subways demonstrate the most consistent performance, with shorter and less variable delays, likely due to their isolated underground operation.
 ```{r}
-#| label: tbl-feature_importance
-#| tbl-cap: "Feature importance scores for the random forest model"
+#| label: fig-delay_by_mode
+#| fig-cap: "Distribution of delays by mode of transit"
 #| echo: false
 #| warning: false
 #| message: false
 
-# Example data for feature importance table
-feature_importance <- data.frame(
-  Predictor = c("mode", "day_of_week", "location", "bound"),
-  Importance = c(38.7, 29.5, 20.3, 11.5)
-)
+ggplot(cleaned_data, aes(x = mode, y = min_delay, color = mode)) +
+  geom_jitter(width = 0.3, alpha = 0.6, size = 2) +
+  stat_summary(fun = mean, geom = "point", size = 4, shape = 23, fill = "gold") +
+  labs(
+    x = "Mode of Transit",
+    y = "Delay Duration (minutes)",
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    legend.position = "none"
+  )
 
-# Creating the table
-knitr::kable(
-  feature_importance,
-  col.names = c("Predictor", "Importance (%)"),
-  booktabs = TRUE,
-  format = "markdown"
-)
 
 ```
-The mode of transit is the most influential predictor, underscoring its impact on delay patterns. Temporal variables like day_of_week also play a significant role, reflecting commuter-driven trends.
 
-### Residual Analysis
-Residual plots were examined to evaluate the model's assumptions and identify potential biases:
+@fig-delays_by_direction examines the average delays based on the travel direction: East, West, North, and South. Northbound trips have the longest average delays (17.3 minutes), while southbound trips experience the shortest delays (14.7 minutes). East and westbound trips have comparable delays, averaging 16.6 minutes and 16.4 minutes, respectively. These findings may reflect route-specific operational challenges or variations in traffic and transit infrastructure across different directions.
 ```{r}
-#| label: fig-residuals
-#| fig-cap: "Residual plot for predicted vs. observed delays"
+#| label: fig-delays_by_direction
+#| fig-cap: "Average delays by travel direction."
 #| echo: false
 #| warning: false
 #| message: false
-#| fig-width: 5
 
-# Simulated residuals for visualization
-set.seed(123)
-example_residuals <- data.frame(
-  observed = rnorm(100, mean = 20, sd = 8),
-  predicted = rnorm(100, mean = 20, sd = 7)
+avg_delay_by_direction <- cleaned_data %>%
+  filter(!is.na(bound)) %>% # Exclude rows where 'bound' is NA
+  group_by(bound) %>%
+  summarise(avg_delay = mean(min_delay, na.rm = TRUE))
+
+ggplot(avg_delay_by_direction, aes(x = bound, y = avg_delay, fill = bound)) +
+  geom_col(width = 0.6, alpha = 0.8) +
+  geom_text(aes(label = round(avg_delay, 1)), vjust = 2, size = 4) +
+  labs(
+    x = "Travel Direction",
+    y = "Average Delay Duration (minutes)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    legend.position = "none"
+  )
+
+```
+
+The scatterplot in @fig-gap_vs_delay illustrates the relationship between the time gap between consecutive transit vehicles and the resulting delay duration. The trend line indicates a positive correlation: larger time gaps correspond to longer delays. This relationship highlights the importance of maintaining consistent headways to minimize delays and optimize transit performance. The scatterplot also shows a wide range of delays for small time gaps, suggesting that other factors, such as operational issues or traffic conditions, play a significant role in influencing delays.
+```{r}
+#| label: fig-gap_vs_delay
+#| fig-cap: "Relationship between time gap and delay duration."
+#| echo: false
+#| warning: false
+#| message: false
+
+ggplot(cleaned_data, aes(x = min_gap, y = min_delay)) +
+  geom_point(alpha = 0.5, color = "darkblue") +
+  geom_smooth(method = "lm", color = "red", linetype = "dashed") +
+  labs(
+    x = "Time Gap (minutes)",
+    y = "Delay Duration (minutes)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12)
+  )
+
+```
+
+A closer examination of streetcar lines 501 and 510, shown in @fig-streetcar_lines, reveals notable differences in their delay durations. Line 501 experiences longer average delays (16.1 minutes) compared to line 510 (10.7 minutes). These disparities may be attributed to differences in route length, traffic congestion, or infrastructure quality. Line 501’s longer delays suggest the need for targeted interventions to improve reliability along this route.
+```{r}
+#| label: fig-streetcar_lines
+#| fig-cap: "Average delays for Streetcar Lines 501 and 510."
+#| echo: false
+#| warning: false
+#| message: false
+
+streetcar_delays <- cleaned_data %>%
+  filter(mode == "Streetcar" & line %in% c("501", "510")) %>%
+  group_by(line) %>%
+  summarise(avg_delay = mean(min_delay, na.rm = TRUE))
+
+ggplot(streetcar_delays, aes(x = line, y = avg_delay, fill = line)) +
+  geom_col(width = 0.6, alpha = 0.8) +
+  geom_text(aes(label = round(avg_delay, 1)), vjust = 2, size = 4) +
+  labs(
+    x = "Streetcar Line",
+    y = "Average Delay Duration (minutes)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    legend.position = "none"
+  )
+
+```
+
+@fig-day_date_trends explores the interplay between daily delays and the day of the week over time. The temporal trends reveal significant variations, with some months exhibiting consistent spikes in delays on specific weekdays. For instance, delays are particularly high during April, potentially reflecting seasonal disruptions such as weather-related challenges or scheduled maintenance. These patterns emphasize the need for adaptive scheduling and operational strategies to address temporal fluctuations in delay durations.
+```{r}
+#| label: fig-day_date_trends
+#| fig-cap: "Temporal Trends in Delays by Day of the Week and Date."
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 12
+#| fig-height: 6
+
+temporal_delays <- cleaned_data %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d")) %>%
+  group_by(date, day_of_week) %>%
+  summarise(avg_delay = mean(min_delay, na.rm = TRUE)) %>%
+  ungroup()
+
+# Plot temporal trends in delays by day of the week
+ggplot(temporal_delays, aes(x = date, y = avg_delay, color = day_of_week)) +
+  geom_line(size = 0.5) +  # Adjusted line thickness
+  geom_point(size = 1, alpha = 0.7) +
+  labs(
+    x = "Date (2024)",
+    y = "Average Delay Duration (minutes)",
+    color = "Day of Week"
+  ) +
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+```
+
+\newpage
+## Modeling Performance and Residual Analysis
+The random forest model developed to predict TTC delays demonstrates strong predictive performance, as summarized in @tbl-model_performance. Key metrics include:
+
+  - R-squared: 0.887, indicating the model explains 88.7% of the variance in delay duration.
+  - RMSE: 20.815 minutes, reflecting the typical error in delay predictions.
+These results suggest that the model effectively captures the key factors influencing delays, providing a reliable basis for forecasting and analysis.
+```{r}
+#| label: tbl-model_performance
+#| tbl-cap: "Random Forest Model Performance Metrics"
+#| echo: false
+#| warning: false
+#| message: false
+
+# Convert to a data frame for display
+performance_metrics <- data.frame(
+  Metric = c("R-squared", "RMSE"),
+  Value = c(model_metrics$R_squared, model_metrics$RMSE)
 )
 
-ggplot(example_residuals, aes(x = predicted, y = observed)) +
+# Render the table
+knitr::kable(performance_metrics, booktabs = TRUE)
+
+```
+
+@fig-feature_importance highlights the contribution of each feature to the random forest model’s predictions. Features with greater importance, such as min_gap and mode, exert a stronger influence on delay predictions. This underscores the critical factors driving TTC delays and emphasizes the significance of leveraging detailed temporal, spatial, and operational data for accurate predictive modeling.
+\newpage
+```{r}
+#| label: fig-feature_importance
+#| fig-cap: "Feature importance in predicting TTC delays"
+#| echo: false
+#| warning: false
+#| message: false
+
+# Extract feature importance
+importance_data <- data.frame(
+  Feature = rownames(randomForest::importance(model)),
+  Importance = randomForest::importance(model)[, 1]
+) %>%
+  arrange(desc(Importance))
+
+# Plot feature importance
+ggplot(importance_data, aes(x = reorder(Feature, Importance), y = Importance, fill = Importance)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    x = "Feature",
+    y = "Importance"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    legend.position = "none"
+  )
+
+```
+
+The residual analysis, presented in @fig-residual_analysis, examines the alignment between observed and predicted delay durations. The scatterplot shows that most predictions align closely with the observed values, particularly for shorter delays. Minor deviations are observed for extreme delays, indicating areas for further refinement in the model. Overall, the residual analysis supports the robustness of the model in accurately predicting TTC delays.
+```{r}
+#| label: fig-residual_analysis
+#| fig-cap: "Residual analysis for model predictions vs. observed delays."
+#| echo: false
+#| warning: false
+#| message: false
+
+# Extract test data and predictions
+test_data <- model_metrics$Test_Data
+test_predictions <- model_metrics$Predictions
+
+# Create residuals data
+residuals_data <- data.frame(
+  observed = test_data$min_delay,
+  predicted = test_predictions
+)
+
+# Plot residual analysis
+ggplot(residuals_data, aes(x = predicted, y = observed)) +
   geom_point(alpha = 0.7, color = "darkorange") +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
-  labs(x = "Predicted Delay (minutes)", y = "Observed Delay (minutes)") +
-  theme_minimal()
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    x = "Predicted Delay (minutes)",
+    y = "Observed Delay (minutes)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+  )
 
 ```
-The residual plot shows no significant pattern, indicating that the model's predictions are unbiased and reliable.
 
-## Discussion
+\newpage
+# Discussion {#sec-discussion}
 ## Interpretation of Key Findings
-### Geographic Variations
-The results indicate significant geographic differences in delays between Dundas and Yorkdale. Dundas, located in downtown Toronto, experiences longer delays, likely due to high passenger volumes, traffic congestion, and frequent service intervals. In contrast, Yorkdale's shorter delays align with its suburban setting, where transit demand and road density are comparatively lower.
+This study uncovers critical factors influencing delays in the Toronto Transit Commission (TTC) system, revealing the interplay between geographic, modal, and temporal dimensions. The random forest model identified transit mode and service regularity (min_gap) as the most influential predictors, while geographic and temporal factors provided further explanatory power. These findings align with transit literature that emphasizes the multidimensional nature of delays, where operational, spatial, and temporal elements converge to shape commuter experiences [@citeCurrie2012; @citeCats2017].
 
-### Temporal Patterns
-Delays are most prominent on weekdays, peaking on Thursdays and Fridays, which reflects the influence of commuter-driven demand. Lower delays during weekends suggest reduced transit usage and operational stress, supporting the case for dynamic scheduling to better match service levels with demand.
+The analysis of delay patterns across locations (@fig-delays_by_location) demonstrates that Dundas, situated in Toronto’s urban core, experiences longer delays than suburban Yorkdale. This difference reflects the challenges of operating in high-demand, high-congestion environments, consistent with urban transit studies that identify population density and traffic bottlenecks as significant contributors to delays [@citeLitman2023]. The variability in delays across modes, illustrated in @fig-delay_by_mode, highlights the unique challenges faced by buses, which are more exposed to traffic conditions and external disruptions compared to streetcars and subways. Temporal trends (@fig-temporal_trends_adjusted) further reveal that delays peak on weekdays, particularly on Mondays and Fridays, correlating with commuter-driven demand.
 
-### Mode-Specific Challenges
-Transit mode emerged as the most significant predictor of delays, with buses experiencing the highest delay rates. Buses face unique challenges such as exposure to traffic congestion and external events, while streetcars and subways are influenced by route-specific or infrastructure-based factors.
+The strong performance of the random forest model, as summarized in @tbl-model_performance, underscores the predictive power of incorporating multiple predictors, including min_gap and mode. The R-squared value of 0.887 and RMSE of 20.815 minutes indicate that the model captures most of the variance in delay durations while maintaining reasonable predictive accuracy.
 
-  \newpage
-  # References
+## Geographic and Modal Challenges
+The geographic focus on Dundas and Yorkdale reveals stark contrasts in delay dynamics. Dundas exhibits higher average delays, likely due to high transit demand and frequent service intervals, as reflected in @tbl-location_summary. These findings align with urban transit studies that highlight how congestion and dense service schedules exacerbate delays in city centers [@citeCats2017]. In contrast, Yorkdale’s suburban environment, characterized by lower demand and less frequent service, provides a more predictable operating context.
+
+The analysis underscores the disproportionate challenges faced by buses, which exhibit the longest and most variable delays across all modes (@tbl-mode_delay_summary). These findings mirror global patterns where buses are particularly susceptible to traffic congestion, road conditions, and external events [@citeHess2007]. Streetcars, operating in mixed-traffic conditions, experience moderate delays, reflecting their partial reliance on dedicated tracks. Subways emerge as the most reliable mode, benefiting from isolated infrastructure that minimizes external disruptions.
+
+The scatterplot in @fig-gap_vs_delay highlights the positive correlation between larger time gaps (min_gap) and longer delays, emphasizing the importance of maintaining consistent headways for transit reliability. This aligns with findings in transit scheduling literature, which emphasize the critical role of regular intervals in minimizing delays and optimizing passenger wait times [@citeCurrie2012].
+
+## Temporal Patterns and Scheduling Implications
+Temporal variations in delays reveal significant insights into the influence of weekly commuter patterns. Delays peak on Mondays and Fridays, consistent with higher transit demand during the start and end of the workweek (@tbl-dow_delay_summary). These trends underscore the need for dynamic scheduling that aligns service levels with commuter demand, as suggested by operational best practices [@citeLitman2023].
+
+The analysis also identifies Saturdays as having the lowest average delays, reflecting reduced transit usage and operational stress during weekends. This finding is consistent with transit studies emphasizing the cyclical nature of weekday versus weekend demand patterns [@citeHess2007].
+
+## Limitations and Weaknesses
+Despite the robustness of the findings, several limitations warrant consideration. The study’s geographic scope is limited to two locations, Dundas and Yorkdale, which restricts the generalizability of results to other parts of Toronto. Expanding the analysis to include a broader range of locations would provide a more comprehensive understanding of transit dynamics.
+
+The exclusion of contextual variables, such as weather conditions, construction activity, and special events, represents another limitation. Previous studies highlight the impact of such factors on transit reliability [@citeHess2007], suggesting that their inclusion could improve the model’s explanatory power. Additionally, the focus on weekday versus weekend patterns, without accounting for finer-grained time-of-day trends, limits insights into peak versus off-peak delay dynamics.
+
+While the random forest model provides strong predictive accuracy, its interpretability is limited compared to traditional regression models. Future research could explore hybrid approaches that combine the predictive strength of machine learning with the interpretability of linear models, addressing this trade-off [@citeBreiman2001].
+
+## Future Directions
+Future research should expand the geographic scope to include additional locations across Toronto’s transit network. This would enable a more nuanced analysis of spatial variations and their implications for system-wide operations. Comparative analyses between urban, suburban, and rural contexts could further enrich understanding.
+
+Integrating contextual variables such as weather, road closures, and special events would provide a more comprehensive understanding of delay drivers. For example, extreme weather events are known to disrupt transit operations, increasing delay variability [@citeCurrie2012]. Including such factors could enhance both predictive accuracy and practical relevance.
+
+The incorporation of real-time data into dynamic models could enable adaptive scheduling and operational decision-making. Additionally, integrating passenger metrics, such as satisfaction surveys or ridership data, would provide a holistic view of transit performance. This approach aligns with emerging trends in transit research, emphasizing the integration of operational and user-centered metrics [@citeHess2007].
+
+Future studies should explore alternative modeling techniques, such as mixed-effects models or ensemble approaches, to better capture hierarchical relationships and predictor interactions. These techniques could address some limitations of random forests while retaining predictive strength [@citeBreiman2001].
+
+
+\newpage
+
+\appendix
+
+# Appendix {-}
+
+# Idealized Methodology for a Survey on TTC Delays {#sec-survey}
+## Overview
+To complement the quantitative analysis of TTC delays, an idealized survey methodology could capture commuter perceptions and experiences with transit delays across Toronto. The survey would aim to identify the factors influencing passenger satisfaction, the perceived causes of delays, and preferences for operational improvements. This approach would provide a deeper understanding of commuter behavior and the social implications of transit delays, enriching the findings presented in this study.
+
+## Sampling Approach
+A stratified random sampling method would be employed to ensure representation across key demographic and transit-related variables. This approach would capture variations in delay experiences based on commuter profiles and transit contexts, facilitating detailed comparisons across geographic locations, transit modes, and demographic groups.
+
+1. Transit Mode: The sample would include users of buses, streetcars, and subways to reflect the modal diversity within the TTC system. Bus users, who experience the highest variability in delays, would form a larger stratum, followed by streetcar and subway users. This stratification accounts for the operational differences among modes, as highlighted in @tbl-mode_delay_summary.
+
+2. Geographic Location: Respondents would be grouped based on their primary transit location, focusing on urban (e.g., Dundas) and suburban (e.g., Yorkdale) contexts. Urban commuters are likely to report longer delays and more frequent disruptions, as shown in @fig-delays_by_location, whereas suburban commuters may face less frequent but potentially longer interruptions.
+
+3. Commuter Profile: Respondents would be stratified by key demographic variables such as age, employment status, and commuting purpose. For example, working professionals may emphasize reliability during peak hours, while students may prioritize affordability. Stratifying by these variables ensures the inclusion of diverse perspectives on TTC service quality.
+
+4. Frequency of Use: Respondents would be grouped into frequent users (daily commuters), occasional users (weekly or less), and infrequent users (sporadic riders). Frequent users may offer more detailed insights into recurring delay patterns, while occasional users may provide perspectives on specific disruptions.
+
+A total sample size of approximately 1,500 respondents would be targeted, divided proportionally across the strata. This approach ensures meaningful representation and supports robust statistical analyses of commuter perceptions and preferences.
+
+## Recruitment Method
+Participants would be recruited through multichannel outreach, leveraging digital platforms, in-transit recruitment, and community-based engagement.
+
+Online Panels: Collaborating with consumer research platforms would provide access to a broad demographic range, ensuring representation of frequent and infrequent transit users. Online recruitment enables targeted outreach based on commuter profiles and geographic locations.
+
+In-Transit Recruitment: QR codes placed on TTC vehicles and stations would invite commuters to participate in the survey. This method ensures real-time engagement with active transit users, capturing immediate perceptions of delays.
+
+Community Outreach: Partnering with local organizations, community centers, and neighborhood associations would help reach underrepresented groups, including suburban commuters and culturally diverse populations. Social media campaigns targeting Toronto-based users would further enhance participation.
+
+## Survey Structure
+The survey would include a mix of closed-ended and open-ended questions to balance quantitative insights with qualitative feedback.
+
+### Question Types
+1. **Commuting Habits**
+
+- Frequency of transit use (e.g., daily, weekly).
+- Primary mode of transit and typical routes taken.
+- Average time spent commuting.
+2. **Delay Perceptions**
+
+- Perceived frequency of delays (e.g., often, sometimes, rarely).
+- Typical delay duration experienced (e.g., less than 10 minutes, 10–20 minutes).
+- Satisfaction with delay communication (e.g., announcements, apps).
+3. **Impact of Delays**
+
+- How delays affect daily schedules (e.g., late to work, missed appointments).
+- Strategies used to mitigate delays (e.g., leaving earlier, using alternative routes).
+- Willingness to pay for reliability improvements (e.g., higher fares for faster service).
+4. **Transit Satisfaction**
+
+- Overall satisfaction with TTC services on a Likert scale.
+- Perceptions of mode-specific reliability (bus vs. streetcar vs. subway).
+- Desired operational improvements (e.g., more frequent service, real-time delay updates).
+5. ***External Factors**
+
+- Awareness of factors contributing to delays (e.g., traffic, weather, construction).
+- Perceptions of TTC’s efforts to address delays.
+- Suggestions for improving commuter experiences during delays.
+
+### Sample Survey
+**Background and Purpose of the Study**  
+This survey is part of a research study aimed at understanding transit delays within the Toronto Transit Commission (TTC). By participating, you will help identify key patterns in delays and provide insights to improve transit reliability and commuter experiences.
+
+**Participation Involvement**  
+You are invited to complete a short survey about your experiences with TTC transit delays. The survey will take approximately 5–7 minutes and includes both multiple-choice and open-ended questions about your transit habits and perceptions.
+
+**Confidentiality**  
+Your responses will remain strictly confidential. No identifying information will be shared in any reports or presentations. All responses will be anonymized, ensuring that individual participants cannot be identified in the analysis.
+
+**Usage of Data**  
+The results of this study will contribute to research reports and presentations designed to better understand the factors influencing TTC transit delays. By consenting, your responses will be included in the analysis, providing critical data for this research.
+
+**Withdrawal from the Study**  
+Participation in this survey is entirely voluntary. You may withdraw your consent and request the removal of your data within one month of survey completion by contacting the research team.
+
+**Informed Consent**
+
+After reading the details of the study, do you consent to have your anonymized survey responses included in the research?  
+   - Yes, I consent to participate and have my responses included.  
+   - No, I do not consent, but I would still like to complete the survey.
+
+1. How often do you use TTC transit services?
+
+  - Daily
+  - Weekly
+  - Monthly
+  - Rarely
+2. Which mode of transit do you primarily use?
+
+  - Bus
+  - Streetcar
+  - Subway
+3. How frequently do you experience delays?
+
+  - Always
+  - Often
+  - Sometimes
+  - Rarely
+  - Never
+4. What is the average delay duration you experience?
+
+  - Less than 5 minutes
+  - 5–10 minutes
+  - 10–20 minutes
+  - More than 20 minutes
+5. How satisfied are you with the communication of delays by TTC?
+
+  - Very dissatisfied
+  - Dissatisfied
+  - Neutral
+  - Satisfied
+  - Very satisfied
+6. How do delays typically impact your daily routine?
+
+  - No impact
+  - Minor inconvenience
+  - Significant disruption
+  - Major disruption
+7. Would you support increased fares for improved reliability?
+
+  - Strongly oppose
+  - Oppose
+  - Neutral
+  - Support
+  - Strongly support
+8. What operational improvements would you prioritize?
+
+  - Increased service frequency
+  - Real-time delay updates
+  - Improved delay communication
+  - Other (please specify)
+9. What factors do you believe most contribute to delays?
+
+  - Traffic congestion
+  - Weather conditions
+  - Infrastructure issues
+  - Other (please specify)
+10. How satisfied are you overall with TTC services?
+
+  - Very dissatisfied
+  - Dissatisfied
+  - Neutral
+  - Satisfied
+  - Very satisfied
+11. How do you usually respond to transit delays? (Select all that apply)  
+  - Wait for the delay to resolve  
+  - Switch to another mode of transit (e.g., take a bus instead of a subway)  
+  - Cancel or change your plans  
+  - Other (please specify): ____________________  
+
+**Open-Ended Feedback**
+
+11. Can you describe a specific instance where a TTC delay significantly impacted you? How did this affect your perception of TTC services?  
+
+12. In your opinion, what actions or improvements could the TTC take to minimize delays or improve commuter experiences?  
+
+**End of Survey**
+
+Thank you for your time and participation! Your insights are invaluable to this research and will contribute to a better understanding of TTC transit delays and the development of strategies to enhance transit reliability. For further information or updates on this research, please feel free to contact the research team.
+
+## Linkage to Literature
+The survey design leverages established principles in sampling methodology and survey research to ensure robust and representative data collection. Stratified random sampling is a foundational technique in survey methodology, recommended for achieving representative samples across key population subgroups [@citeLohr2019Sampling]. By dividing the population into meaningful strata—such as transit modes, geographic locations, and demographic categories—this approach improves precision and ensures that diverse perspectives are captured in the analysis [@citeGroves2009Survey].
+
+To maximize participation and minimize selection bias, multichannel recruitment strategies are employed. Research emphasizes the importance of utilizing varied recruitment methods, including digital platforms, in-person outreach, and community engagement, to enhance inclusivity and reach underrepresented populations [@citeCouper2000WebSurveys; @citeDillman2014TailoredDesign]. This multichannel approach aligns with best practices for public surveys, allowing researchers to overcome accessibility barriers and improve response rates.
+
+Including questions on delay perceptions and their impacts aligns with broader survey design strategies that emphasize the collection of both subjective and objective data for comprehensive analysis [@citeFowler2014SurveyResearch]. The focus on mode-specific reliability and geographic variations reflects principles from urban mobility studies, where localized and operational factors are critical to understanding transit system performance [@citeBabbie2020ResearchMethods].
+
+By integrating demographic, geographic, and behavioral data, this survey aims to provide a detailed and representative picture of the factors influencing TTC delays. This approach not only enhances the validity of the findings but also supports actionable insights for improving commuter experiences and operational planning.
+
+\newpage
+# Model Details {#sec-model-details}
+## Out-of-Bag Error Analysis
+The Out-of-Bag (OOB) error rate, visualized in @fig-oob-error, provides an internal estimate of the Random Forest model's predictive performance during training. The OOB error rate decreases rapidly as the number of trees grows, stabilizing after approximately 200 trees, indicating that the model has achieved an optimal balance between bias and variance.
+
+Unlike the RMSE calculated on the test dataset, the OOB error reflects how well the model generalizes to unseen data during training. The stabilization of the OOB error suggests that additional trees provide diminishing improvements, ensuring robustness without overfitting. While the specific OOB error values depend on the dataset and feature selection, the curve highlights the model’s iterative refinement, demonstrating that it effectively captures the patterns in the training data. This behavior underlines the reliability of the Random Forest approach for modeling TTC delays.
+```{r}
+#| echo: false
+#| eval: true
+#| label: fig-oob-error
+#| fig-cap: "Out-of-Bag error for the Random Forest model."
+
+# Plot OOB error
+plot(model)
+
+```
+## Residuals Analysis
+
+@tbl-prediction-summary provides a detailed summary of the observed, predicted, and residual values from the test dataset. The mean observed delay is 16.138 minutes, while the model's mean predicted delay is 16.181 minutes, resulting in a minimal mean residual of -0.043 minutes. The Root Mean Squared Error (RMSE) is 20.815, reflecting the average deviation between predicted and actual values. This small residual error suggests that the model provides robust predictions across different transit scenarios.
+```{r}
+#| label: tbl-prediction-summary
+#| tbl-cap: "Summary of Model Predictions on Test Data"
+#| echo: false
+
+# Create a dataframe with observed, predicted, and residuals
+predictions_summary <- data.frame(
+  Observed = test_data$min_delay,
+  Predicted = predict(model, newdata = test_data),
+  Residual = test_data$min_delay - predict(model, newdata = test_data)
+)
+
+# Summarize statistics
+summary_table <- data.frame(
+  Statistic = c("Mean Observed Delay", "Mean Predicted Delay", "Mean Residual", "RMSE"),
+  Value = c(
+    round(mean(predictions_summary$Observed, na.rm = TRUE), 3),
+    round(mean(predictions_summary$Predicted, na.rm = TRUE), 3),
+    round(mean(predictions_summary$Residual, na.rm = TRUE), 3),
+    round(sqrt(mean(predictions_summary$Residual^2, na.rm = TRUE)), 3)
+  )
+)
+
+# Display as a table
+knitr::kable(
+  summary_table,
+  col.names = c("Statistic", "Value"),
+  booktabs = TRUE,
+  digits = 3
+)
+
+```
+
+Residual Analysis by Transit Mode
+Residuals, which represent the difference between observed and predicted delay values, are analyzed by transit mode in @tbl-error-distribution. Key observations include:
+
+  - Buses: Mean residual of 0.864 minutes with a standard deviation of 24.378, reflecting higher variability due to external factors like traffic congestion.
+  - Streetcars: Slightly negative mean residual (-0.374 minutes) with lower variability (SD 17.967), indicating more consistent predictions.
+  - Subways: The lowest mean residual (-2.446 minutes) and variability (SD 6.122), aligning with the relatively stable performance of subway services.
+This analysis emphasizes the model's ability to capture delay dynamics specific to each mode while acknowledging the unique operational challenges buses face.
+```{r}
+#| label: tbl-error-distribution
+#| tbl-cap: "Error Distribution by Transit Mode"
+#| echo: false
+
+# Add mode and residuals to a data frame
+error_distribution <- test_data %>%
+  mutate(
+    Residual = test_data$min_delay - predict(model, newdata = test_data)
+  ) %>%
+  group_by(mode) %>%
+  summarise(
+    Mean_Residual = mean(Residual, na.rm = TRUE),
+    Median_Residual = median(Residual, na.rm = TRUE),
+    SD_Residual = sd(Residual, na.rm = TRUE)
+  )
+
+# Display as a table
+knitr::kable(
+  error_distribution,
+  col.names = c("Transit Mode", "Mean Residual", "Median Residual", "Residual Std Dev"),
+  booktabs = TRUE,
+  digits = 3
+)
+
+```
+
+Day-of-Week Residual Patterns
+Residuals are further analyzed by day of the week in @tbl-residuals-dow. The findings reveal that residuals vary slightly across days, with the largest mean residual on Wednesday (0.678 minutes) and the lowest on Sunday (-0.858 minutes). These patterns likely reflect differences in transit demand and scheduling efficiency during weekdays compared to weekends.
+
+  - Weekdays: Higher variability, consistent with increased commuter traffic and peak-hour disruptions.
+  - Weekends: Lower residuals and variability, indicating better alignment between predicted and observed delays.
+This analysis supports the model's ability to adapt to temporal fluctuations in transit operations.
+```{r}
+#| label: tbl-residuals-dow
+#| tbl-cap: "Residuals by Day of the Week"
+#| echo: false
+
+# Summarize residuals by day of the week
+residuals_by_dow <- test_data %>%
+  mutate(
+    Residual = test_data$min_delay - predict(model, newdata = test_data)
+  ) %>%
+  group_by(day_of_week) %>%
+  summarise(
+    Mean_Residual = mean(Residual, na.rm = TRUE),
+    Median_Residual = median(Residual, na.rm = TRUE),
+    SD_Residual = sd(Residual, na.rm = TRUE)
+  )
+
+# Display as a table
+knitr::kable(
+  residuals_by_dow,
+  col.names = c("Day of Week", "Mean Residual", "Median Residual", "Residual Std Dev"),
+  booktabs = TRUE,
+  digits = 3
+)
+
+```
+
+The diagnostic metrics demonstrate the robustness of the Random Forest model in capturing delay patterns across modes and temporal strata. The low RMSE, combined with minimal mean residuals, underscores the model's predictive accuracy. Additionally, the nuanced residual patterns by mode and day of the week highlight the importance of contextual factors, such as traffic congestion and scheduling practices, in influencing delay dynamics.
+
+\newpage
+# Data Cleaning Details {#sec-data-cleaning}
+The cleaning process for the TTC delay data was a critical step in preparing the raw datasets for meaningful analysis. This process focused on standardizing, harmonizing, and integrating raw data from bus, subway, and streetcar services into a single, comprehensive dataset. The cleaning script handled inconsistent formats across the datasets and ensured that relevant variables were appropriately structured. Three separate raw datasets were processed: raw_data_bus.csv, raw_data_subway.csv, and raw_data_streetcar.csv. Each dataset was preprocessed to address mode-specific nuances before being combined into a unified dataset.
+
+The cleaning process began by loading the datasets and standardizing date formats to the common YYYY-MM-DD structure using the as.Date() function. Temporal variables such as the day of the week were derived from the standardized date column, enabling weekday-specific analysis. For the bus data, the Direction column was recoded to cardinal directions (North, South, East, West) using case_when(), with invalid entries marked as NA. Similarly, locations in the bus data were categorized into key landmarks such as DUNDAS and YORKDALE, with all other locations grouped under OTHER. Additional columns like Min Delay and Min Gap were retained as quantitative metrics of delay durations and gaps. Since buses do not have defined lines, a placeholder column for line was added to ensure compatibility with subway and streetcar data.
+
+The subway data underwent a similar standardization process. The Bound column was cleaned to align with cardinal directions, and the Station column was grouped into predefined categories based on prominent landmarks or grouped under OTHER. As with the bus data, Min Delay and Min Gap metrics were preserved for further analysis, and a placeholder line column was included for consistency. The streetcar data required additional transformations to address its unique structure. Specific lines, such as 510 and 501, were explicitly retained, while other streetcar lines were grouped under OTHER. Locations and directions were cleaned following the same approach used for buses and subways.
+
+Once cleaned, the datasets for all three transit modes were combined using bind_rows(), resulting in a unified dataset with consistent column names and data structures. This combined dataset included key attributes such as the mode of transit, date, day of the week, cardinal direction of travel, delay metrics (Min Delay and Min Gap), location, and line information. The cleaned dataset captures essential information while reducing noise from irrelevant or inconsistent raw data entries.
+
+## Combined Dataset
+
+The final cleaned dataset integrates data from bus, subway, and streetcar services, creating a comprehensive resource for analyzing TTC delays. The dataset includes harmonized variables such as mode, date, day_of_week, bound, min_delay, min_gap, location, and line. This structure ensures compatibility across transit modes and provides the flexibility to perform mode-specific or aggregate analyses. The first few rows of the cleaned dataset are shown in @tbl-cleaned_data, highlighting the key variables retained after cleaning.
+```{r}
+#| label: tbl-cleaned_data
+#| tbl-cap: "Final Cleaned TTC Delay Dataset"
+#| echo: false
+
+cleaned_data %>%
+  head() %>%
+  knitr::kable(
+    col.names = c("Mode", "Date", "Day of Week", "Bound", "Min Delay", "Min Gap", "Location", "Line"),
+    booktabs = TRUE
+  )
+
+
+```
+
+To facilitate efficient storage and downstream analysis, the cleaned dataset was saved as a Parquet file using the arrow package. This format ensures data integrity and allows for faster read and write operations compared to traditional CSV files. The cleaned dataset was saved to the analysis_data directory for use in subsequent modeling and analysis.
+
+\newpage
+# References

@@ -8,8 +8,6 @@
 # - Run 03-clean_data.R to generate the combined Parquet file.
 # - Install required packages
 
-
-
 #### Workspace setup ####
 library(tidyverse)
 library(arrow)
@@ -25,8 +23,6 @@ if (!dir.exists(models_dir)) {
 # Load the cleaned dataset
 combined_data <- read_parquet(here::here("data", "02-analysis_data", "combined_ttc_delay_data.parquet"))
 
-
-
 #### Data Preparation ####
 
 # Remove missing values and focus on key variables
@@ -39,16 +35,12 @@ model_data <- combined_data %>%
     day_of_week = factor(day_of_week, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))
   )
 
-
-
 #### Train-Test Split ####
 
 set.seed(304)
 train_index <- createDataPartition(model_data$min_delay, p = 0.8, list = FALSE)
 train_data <- model_data[train_index, ]
 test_data <- model_data[-train_index, ]
-
-
 
 #### Random Forest Model ####
 
@@ -64,8 +56,6 @@ rf_model <- randomForest(
 # Save the random forest model
 saveRDS(rf_model, file = file.path(models_dir, "random_forest_model_delay.rds"))
 
-
-
 #### Model Evaluation ####
 
 # Predict on test data
@@ -80,7 +70,16 @@ cat("Random Forest Model Performance:\n")
 cat("R-squared: ", round(r_squared, 3), "\n")
 cat("RMSE: ", round(rmse, 3), "\n")
 
+# Save R-squared, RMSE, and test predictions to a named list
+evaluation_results <- list(
+  R_squared = round(r_squared, 3),
+  RMSE = round(rmse, 3),
+  Test_Data = test_data,
+  Predictions = test_predictions
+)
 
+# Save the evaluation results to an RDS file for Quarto
+saveRDS(evaluation_results, file = file.path(models_dir, "evaluation_results.rds"))
 
 #### Feature Importance ####
 
