@@ -4,7 +4,7 @@ This repository contains all the necessary information and files to replicate th
 
 ## Paper Overview
 
-This paper investigates patterns and predictors of transit delays within the TTC network, focusing on three transit modes: buses, subways, and streetcars. Using data from [Open Data Toronto](https://open.toronto.ca/) and simulated datasets, the study examines the influence of geographic location, transit mode, and temporal factors on delay durations. A random forest model was used to predict `min_delay`, revealing that buses experience the highest delays due to their susceptibility to traffic congestion, while urban areas like Dundas exhibit longer delays than suburban locations such as Yorkdale. The findings provide actionable insights for transit planners, highlighting operational challenges and offering strategies to improve service reliability and commuter satisfaction.
+This paper investigates patterns and predictors of transit delays within the TTC network, focusing on three transit modes: buses, subways, and streetcars. Using data from [Open Data Toronto](https://open.toronto.ca/), the study examines the influence of geographic location, transit mode, and temporal factors on delay durations. A random forest model was used to predict `min_delay`, revealing that buses experience the highest delays due to their susceptibility to traffic congestion, while urban areas like Dundas exhibit longer delays than suburban locations such as Yorkdale. The findings provide actionable insights for transit planners, highlighting operational challenges and offering strategies to improve service reliability and commuter satisfaction.
 
 ## File Structure
 
