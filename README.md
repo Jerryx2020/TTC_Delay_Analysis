@@ -14,7 +14,7 @@ The files for this research are organized as follows:
 -   `data/01-raw_data`: The raw TTC dataset obtained from Open Data Toronto.
 -   `data/02-analysis_data`: The cleaned and combined dataset used for final analysis.
 -   `models`: Contains the random forest model and feature importance outputs used in the paper.
--   `other/datasheet`: A detailed datasheet for the Open Data Toronto TTC dataset, including metadata and variable descriptions.
+-   `other/datasheet`: A detailed datasheet for the Open Data Toronto TTC dataset
 -   `other/sketches`: Previews of visualizations and models included in the final research paper.
 -   `other/llm`: Documentation of ChatGPT usage during this project, including prompts and responses.
 -   `paper`: Files used to generate the paper, including the Quarto file, bibliography, and the final paper PDF.
