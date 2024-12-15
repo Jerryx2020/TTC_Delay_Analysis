@@ -22,4 +22,4 @@ The files for this research are organized as follows:
 
 ## Large Language Model (LLM) Usage Statement
 
-This project utilized ChatGPT (ChatGPT-4o model) to assist in various stages, including research, data analysis, code development, and writing. All records of ChatGPT usage are documented in the `other/llm` folder, ensuring transparency and alignment with academic integrity standards.
+This project utilized ChatGPT (ChatGPT-4o model) to assist in various stages, including research, data analysis, code development, and writing. All records of ChatGPT usage are documented in the `other/llm` folder, ensuring transparency.
